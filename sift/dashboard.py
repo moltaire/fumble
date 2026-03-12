@@ -25,7 +25,8 @@ SOURCE_DISPLAY = {
     "manual-test": "Manual",
 }
 SUGGESTION_ICON = {"apply": "🟢", "consider": "🟡", "skip": "🔴"}
-FIT_ICON = {"high": "▲", "medium": "◆", "low": "▽"}
+FIT_ICON = {"high": "🟢", "medium": "🟡", "low": "🔴"}
+GAP_ICON = {"high": "🔴", "medium": "🟡", "low": "🟢"}
 STATUS_ICON = {
     "New": "✨",
     "Researching": "🔵",
@@ -37,6 +38,7 @@ SUGGESTION_LABELS = {
     f"{SUGGESTION_ICON[v]} {v.title()}": v for v in ["apply", "consider", "skip"]
 }
 FIT_LABELS = {f"{FIT_ICON[v]} {v}": v for v in ["high", "medium", "low"]}
+GAP_LABELS = {f"{GAP_ICON[v]} {v}": v for v in ["high", "medium", "low"]}
 
 
 def _stars_display(v) -> str:
@@ -85,6 +87,12 @@ role_fit_labels = st.sidebar.pills(
     default=list(FIT_LABELS),
     selection_mode="multi",
 )
+gap_risk_labels = st.sidebar.pills(
+    "Gap Risk",
+    options=list(GAP_LABELS),
+    default=list(GAP_LABELS),
+    selection_mode="multi",
+)
 status_filter = st.sidebar.pills(
     "Status",
     options=STATUS_PROGRESSION,
@@ -92,13 +100,16 @@ status_filter = st.sidebar.pills(
     selection_mode="multi",
 ) or list(STATUS_PROGRESSION)
 
-hide_hidden = st.sidebar.checkbox("Hide hidden entries", value=True)
+show_hidden = st.sidebar.checkbox("Show hidden entries", value=False)
 
 employers = sorted([e for e in raw_df["employer"].unique() if e])
 selected_employers = (
     (
-        st.sidebar.pills(
-            "Employer", options=employers, default=None, selection_mode="multi"
+        st.sidebar.multiselect(
+            "Employer",
+            options=employers,
+            default=None,
+            placeholder="Filter by employer",
         )
         or []
     )
@@ -109,8 +120,11 @@ selected_employers = (
 job_titles = sorted([t for t in raw_df["job_title"].unique() if t])
 selected_titles = (
     (
-        st.sidebar.pills(
-            "Job Title", options=job_titles, default=None, selection_mode="multi"
+        st.sidebar.multiselect(
+            "Job Title",
+            options=job_titles,
+            default=None,
+            placeholder="Filter by job title",
         )
         or []
     )
@@ -129,7 +143,7 @@ mask = (
     & raw_df["role_fit"].isin(role_fits)
     & raw_df["status"].isin(status_filter)
 )
-if hide_hidden:
+if not show_hidden:
     mask &= ~raw_df["hidden"].astype(bool)
 if selected_employers:
     mask &= raw_df["employer"].isin(selected_employers)
@@ -195,7 +209,7 @@ selection = st.dataframe(
             display_text="https?://(?:[a-zA-Z0-9-]+\\.)*([a-zA-Z0-9-]+\\.[a-zA-Z]{2,})",
         ),
     },
-    use_container_width=True,
+    width="stretch",
     hide_index=True,
     height=table_height,
     selection_mode="single-row",
@@ -264,7 +278,7 @@ if selected_url:
                 width="content",
             )
 
-            st.caption("Rating")
+            st.caption("Your rating")
             new_stars = st.feedback("stars", key=star_key)
 
             # Auto-save status and stars on change
@@ -297,13 +311,13 @@ if selected_url:
             hide_col, delete_col = st.columns(2)
             with hide_col:
                 hide_label = "Unhide" if current_hidden else "Hide"
-                if st.button(hide_label, key="hide_btn", use_container_width=True):
+                if st.button(hide_label, key="hide_btn", width="stretch"):
                     update_tags(
                         selected_url, current_status, not current_hidden, current_stars
                     )
                     st.rerun()
             with delete_col:
-                if st.button("🗑 Delete", key="delete_btn", use_container_width=True):
+                if st.button("🗑 Delete", key="delete_btn", width="stretch"):
                     st.session_state["confirm_delete"] = selected_url
             if st.session_state.get("confirm_delete") == selected_url:
                 st.warning("This will permanently delete this entry.")
