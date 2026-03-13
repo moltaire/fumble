@@ -65,7 +65,7 @@ def _extract_urls(text: str, pattern: str, dedup_pattern: str | None = None) -> 
     return result
 
 
-def fetch_job_urls(since: date | None = None, unread_only: bool = False) -> list[tuple[str, str]]:
+def fetch_job_urls(since: date | None = None, unread_only: bool = False, mark_read: bool = False) -> list[tuple[str, str]]:
     """
     Fetch emails from all configured folders.
     Uses UNSEEN if unread_only=True, otherwise fetches since a given date (default: 3 days).
@@ -112,6 +112,8 @@ def fetch_job_urls(since: date | None = None, unread_only: bool = False) -> list
                     results.append((url, name))
 
             print(f"[{name}] {url_count} URL(s) extracted")
+            if mark_read and uids:
+                server.set_flags(uids, [b"\\Seen"])
 
     finally:
         server.logout()

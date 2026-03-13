@@ -1,16 +1,10 @@
-import os
 from datetime import datetime, timezone
 from typing import Literal
 
-import ollama
-from dotenv import load_dotenv
 from pydantic import BaseModel
 
 from sift.extract import JobListing
-
-load_dotenv()
-
-MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
+from sift.llm import call_llm
 
 SYSTEM_PROMPT = """You are a precise job screening assistant.
 Assess how well a job listing matches a candidate's profile and search criteria.
@@ -29,30 +23,47 @@ USER_PROMPT = """## Candidate Profile
 
 Assess this job listing against the profile and criteria above.
 
-**First, summarise the job in one sentence** (job_summary): what the role is, at what kind of organisation, and the main focus. Plain text, no jargon.
+**job_summary** (required): one sentence — what the role is, at what kind of organisation, and the main focus. Plain text, no jargon.
 
-**Then assess fit on three dimensions:**
-- domain_fit (high/medium/low): Match between job domain and the candidate's target domains from Search Criteria. high = primary target domain. medium = adjacent or acceptable. low = unrelated.
-- role_fit (high/medium/low): Match between role type and the candidate's target roles from Search Criteria. high = strong match on role type and responsibilities. medium = partial match. low = does not match target role types.
-- gap_risk (high/medium/low): Risk of being screened out due to profile gaps. high = role explicitly requires experience the candidate clearly lacks per the profile. medium = some requirements are a stretch. low = profile is a plausible fit.
+**For each dimension, provide a rating and a one-sentence reason:**
+- domain_fit (high/medium/low): match between job domain and the candidate's target domains. high = primary target domain. medium = adjacent or acceptable. low = unrelated.
+- domain_fit_reason: one sentence explaining the rating.
+- role_fit (high/medium/low): match between role type and the candidate's target roles. high = strong match. medium = partial match. low = does not match.
+- role_fit_reason: one sentence explaining the rating.
+- gap_risk (high/medium/low): risk of being screened out due to profile gaps. high = clearly lacks required experience. medium = some requirements are a stretch. low = plausible fit.
+- gap_risk_reason: one sentence explaining the rating.
 
-**Then give:**
-- suggestion: apply / consider / skip
-- reasoning: 1-2 sentence plain-text prose summary. State the key facts directly. No bullet points here.
-- summary: list of 2-3 short bullet strings. Each is a single plain-text phrase, no markdown. Example: ["Core target domain, strong fit", "Requires 3+ yrs industry exp — real gap", "Role type matches well"]
+**fit_areas**: list of 2-4 short phrases identifying where the candidate matches well.
+
+**gaps**: list of gaps between the role requirements and the candidate profile. For each gap:
+- description: one short phrase naming the gap.
+- severity: minor (easily addressed or not critical) / manageable (real gap but not disqualifying) / severe (likely dealbreaker).
+
+**suggestion**: apply / consider / skip
+
+**reasoning**: 2-3 sentence overall assessment built on the above. Plain text, no bullet points.
 """
+
+
+class Gap(BaseModel):
+    description: str
+    severity: Literal["minor", "manageable", "severe"]
 
 
 class FitResult(BaseModel):
     """What the LLM produces — purely analytical fields."""
 
-    job_summary: str = ""
+    job_summary: str
     domain_fit: Literal["high", "medium", "low"]
+    domain_fit_reason: str
     role_fit: Literal["high", "medium", "low"]
+    role_fit_reason: str
     gap_risk: Literal["high", "medium", "low"]
-    reasoning: str
-    summary: list[str] = []
+    gap_risk_reason: str
+    fit_areas: list[str]
+    gaps: list[Gap]
     suggestion: Literal["apply", "consider", "skip"]
+    reasoning: str
 
 
 class Assessment(JobListing, FitResult):
@@ -62,9 +73,12 @@ class Assessment(JobListing, FitResult):
     url: str
     source: str
     scraped_at: datetime
+    rating: str = "new"  # new | liked | disliked
     status: str = "New"
     hidden: bool = False
+    bookmarked: bool = False
     stars: int | None = None
+    summary: list[str] = []  # kept for backward compatibility with old records
 
 
 def assess_fit(
@@ -80,18 +94,9 @@ def assess_fit(
         listing_text=listing.listing_text or "[No listing text extracted]",
     )
 
-    response = ollama.chat(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        format=FitResult.model_json_schema(),
-        options={"temperature": 0.2},
+    content = call_llm(
+        SYSTEM_PROMPT, prompt, FitResult.model_json_schema(), temperature=0.2
     )
-    content = response.message.content
-    if not content:
-        raise ValueError("LLM did not return any content")
     fit = FitResult.model_validate_json(content)
 
     return Assessment(

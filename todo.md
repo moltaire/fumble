@@ -1,16 +1,19 @@
 # Sift — TODO
 
-## LinkedIn
-- [ ] Auth: persistent browser context, log in once manually, reuse session cookies
-- [ ] Test end-to-end with LinkedIn job URLs
+## Assessment quality
+- [ ] Add an "Examples" section to `search-criteria.md` describing what good and bad fits look like (no code needed, likely high impact)
+- [ ] RAG-lite exemplars: embed liked/disliked listings, inject the 1-2 most similar into the assessment prompt to avoid context limits — `rating` in the DB (`liked` / `disliked`) is the natural source for this
+
+## LLM
+- [ ] Split model config: cheap/local model for extraction, powerful model for assessment (`LLM_MODEL_EXTRACT` / `LLM_MODEL_ASSESS`)
 
 ## Pipeline
 - [ ] Retry failed scrapes before silently skipping
 - [ ] Review failures.log after first real run — tune MIN_LISTING_LENGTH and is_job_listing prompt if needed
 
 ## Dashboard
-- [ ] Richer LLM analysis per job (see brainstorming.md): colour-coded fit/gap breakdown, open questions
-- [ ] Consider on-demand second LLM call for structured fit/gap detail (lazy, stored in DB)
+- [ ] Run panel: trigger the pipeline from within the dashboard (select --days/--unread/--force/--mark-read, run main.py as a subprocess, stream output to the UI)
+- [ ] Consider on-demand second LLM call for deeper fit/gap detail (lazy, stored in DB)
 
 ## LangGraph migration
 - [ ] Refactor pipeline into LangGraph nodes (extract → assess → store)

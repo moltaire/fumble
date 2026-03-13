@@ -6,8 +6,8 @@ from urllib.parse import urlparse, urlunparse
 from sift.assess import assess_fit
 from sift.email_fetch import fetch_job_urls
 from sift.extract import extract_listing
-from sift.scrape import scrape_job_page
-from sift.store import init_db, save_assessment, url_exists
+from sift.scrape import login_flow, scrape_job_page
+from sift.store import init_db, mark_url_seen, save_assessment, update_assessment, tracking_url_seen, url_exists
 
 PROFILE = Path("resources/profile.md").read_text()
 CRITERIA = Path("resources/search-criteria.md").read_text()
@@ -37,17 +37,24 @@ def main():
     parser = argparse.ArgumentParser(description="Sift — automated job ad screening")
     parser.add_argument("--days", type=int, default=3, help="Fetch emails from the last N days (default: 3)")
     parser.add_argument("--unread", action="store_true", help="Only process unread emails")
+    parser.add_argument("--login-linkedin", action="store_true", help="Open a browser to log in to LinkedIn and save the session")
+    parser.add_argument("--force", action="store_true", help="Process all URLs, ignoring the seen-URL cache")
+    parser.add_argument("--mark-read", action="store_true", help="Mark fetched emails as read after processing")
     args = parser.parse_args()
+
+    if args.login_linkedin:
+        login_flow()
+        return
 
     init_db()
 
     if args.unread:
         print("Fetching job URLs from unread emails...")
-        job_urls = fetch_job_urls(unread_only=True)
+        job_urls = fetch_job_urls(unread_only=True, mark_read=args.mark_read)
     else:
         since = date.today() - timedelta(days=args.days)
         print(f"Fetching job URLs from emails since {since}...")
-        job_urls = fetch_job_urls(since=since)
+        job_urls = fetch_job_urls(since=since, mark_read=args.mark_read)
     print(f"Found {len(job_urls)} URL(s) across all sources\n")
 
     seen_canonical: set[str] = set()
@@ -55,6 +62,11 @@ def main():
     skip_count = 0
 
     for tracking_url, source in job_urls:
+        if not args.force and tracking_url_seen(tracking_url):
+            print(f"[{source}] Already processed — skipping {tracking_url[:60]}")
+            skip_count += 1
+            continue
+
         print(f"[{source}] Scraping {tracking_url[:60]}...")
 
         try:
@@ -62,6 +74,7 @@ def main():
         except Exception as e:
             print(f"  Scrape failed: {e}")
             _log_failure(tracking_url, source, f"scrape_failed: {e}")
+            mark_url_seen(tracking_url)
             skip_count += 1
             continue
 
@@ -70,11 +83,14 @@ def main():
         if _is_wall(canonical_url):
             print(f"  Login wall detected — skipping")
             _log_failure(canonical_url, source, "login_wall")
+            mark_url_seen(tracking_url)
+            mark_url_seen(canonical_url)
             skip_count += 1
             continue
 
-        if canonical_url in seen_canonical or url_exists(canonical_url):
+        if not args.force and (canonical_url in seen_canonical or url_exists(canonical_url) or tracking_url_seen(canonical_url)):
             print(f"  Already seen — skipping")
+            mark_url_seen(tracking_url)
             skip_count += 1
             continue
 
@@ -83,6 +99,8 @@ def main():
         if len(job_text.strip()) < MIN_LISTING_LENGTH:
             print(f"  Page content too short — skipping")
             _log_failure(canonical_url, source, "page_too_short")
+            mark_url_seen(tracking_url)
+            mark_url_seen(canonical_url)
             skip_count += 1
             continue
 
@@ -92,12 +110,18 @@ def main():
         except Exception as e:
             print(f"  Extraction failed: {e}")
             _log_failure(canonical_url, source, f"extraction_failed: {e}")
+            mark_url_seen(tracking_url)
+            mark_url_seen(canonical_url)
             skip_count += 1
             continue
+
+        print(f"  {listing.employer} — {listing.job_title}")
 
         if not listing.is_job_listing:
             print(f"  Not a job listing — skipping")
             _log_failure(canonical_url, source, "not_a_job_listing")
+            mark_url_seen(tracking_url)
+            mark_url_seen(canonical_url)
             skip_count += 1
             continue
 
@@ -113,11 +137,18 @@ def main():
         except Exception as e:
             print(f"  Assessment failed: {e}")
             _log_failure(canonical_url, source, f"assessment_failed: {e}")
+            mark_url_seen(tracking_url)
+            mark_url_seen(canonical_url)
             skip_count += 1
             continue
 
-        save_assessment(result)
-        print(f"  [{result.suggestion}] {result.domain_fit}/{result.role_fit} — saved")
+        if args.force and url_exists(canonical_url):
+            update_assessment(result)
+        else:
+            save_assessment(result)
+        mark_url_seen(tracking_url)
+        mark_url_seen(canonical_url)
+        print(f"  [{result.suggestion}] {result.domain_fit}/{result.role_fit} — {result.job_summary}")
         new_count += 1
 
     print(f"\nDone. {new_count} new assessments, {skip_count} skipped.")

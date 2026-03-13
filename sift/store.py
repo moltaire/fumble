@@ -44,6 +44,15 @@ def init_db() -> None:
             )
         """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS seen_urls (
+                url      TEXT PRIMARY KEY,
+                seen_at  TEXT NOT NULL
+            )
+        """
+        )
+
         for col in [
             "employer TEXT",
             "job_title TEXT",
@@ -52,11 +61,26 @@ def init_db() -> None:
             "stars INTEGER",
             "summary TEXT DEFAULT '[]'",
             "job_summary TEXT",
+            "domain_fit_reason TEXT",
+            "role_fit_reason TEXT",
+            "gap_risk_reason TEXT",
+            "fit_areas TEXT DEFAULT '[]'",
+            "gaps TEXT DEFAULT '[]'",
+            "bookmarked INTEGER DEFAULT 0",
+            "rating TEXT DEFAULT 'new'",
         ]:
             try:
                 conn.execute(f"ALTER TABLE assessments ADD COLUMN {col}")
             except sqlite3.OperationalError:
                 pass
+
+        # Migrate bookmarked/hidden → rating
+        conn.execute(
+            "UPDATE assessments SET rating = 'liked' WHERE bookmarked = 1 AND (rating IS NULL OR rating = 'new')"
+        )
+        conn.execute(
+            "UPDATE assessments SET rating = 'disliked' WHERE hidden = 1 AND bookmarked = 0 AND (rating IS NULL OR rating = 'new')"
+        )
 
         # Migrate status from old JSON list format → plain string + hidden flag
         rows = conn.execute(
@@ -83,9 +107,10 @@ def save_assessment(a: Assessment) -> None:
             """
             INSERT OR IGNORE INTO assessments
                 (url, source, scraped_at, employer, job_title, language, listing_text,
-                 job_summary, domain_fit, role_fit, gap_risk, reasoning, summary, suggestion,
-                 status, hidden, stars)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 job_summary, domain_fit, domain_fit_reason, role_fit, role_fit_reason,
+                 gap_risk, gap_risk_reason, fit_areas, gaps, reasoning, summary,
+                 suggestion, status, hidden, stars)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 a.url,
@@ -97,8 +122,13 @@ def save_assessment(a: Assessment) -> None:
                 a.listing_text,
                 a.job_summary,
                 a.domain_fit,
+                a.domain_fit_reason,
                 a.role_fit,
+                a.role_fit_reason,
                 a.gap_risk,
+                a.gap_risk_reason,
+                json.dumps(a.fit_areas),
+                json.dumps([g.model_dump() for g in a.gaps]),
                 a.reasoning,
                 json.dumps(a.summary),
                 a.suggestion,
@@ -109,12 +139,48 @@ def save_assessment(a: Assessment) -> None:
         )
 
 
-def update_tags(url: str, status: str, hidden: bool, stars: int | None) -> None:
-    """Update user-managed fields for an assessment."""
+def update_assessment(a: Assessment) -> None:
+    """Overwrite analytical fields for an existing assessment, preserving user-managed fields."""
     with _connect() as conn:
         conn.execute(
-            "UPDATE assessments SET status = ?, hidden = ?, stars = ? WHERE url = ?",
-            (status, int(hidden), stars, url),
+            """
+            UPDATE assessments SET
+                source = ?, scraped_at = ?, employer = ?, job_title = ?, language = ?,
+                listing_text = ?, job_summary = ?, domain_fit = ?, domain_fit_reason = ?,
+                role_fit = ?, role_fit_reason = ?, gap_risk = ?, gap_risk_reason = ?,
+                fit_areas = ?, gaps = ?, reasoning = ?, summary = ?, suggestion = ?
+            WHERE url = ?
+        """,
+            (
+                a.source,
+                a.scraped_at.isoformat(),
+                a.employer,
+                a.job_title,
+                a.language,
+                a.listing_text,
+                a.job_summary,
+                a.domain_fit,
+                a.domain_fit_reason,
+                a.role_fit,
+                a.role_fit_reason,
+                a.gap_risk,
+                a.gap_risk_reason,
+                json.dumps(a.fit_areas),
+                json.dumps([g.model_dump() for g in a.gaps]),
+                a.reasoning,
+                json.dumps(a.summary),
+                a.suggestion,
+                a.url,
+            ),
+        )
+
+
+def update_rating(url: str, rating: str) -> None:
+    """Update the user rating (new | liked | disliked) for an assessment."""
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE assessments SET rating = ? WHERE url = ?",
+            (rating, url),
         )
 
 
@@ -129,6 +195,22 @@ def url_exists(url: str) -> bool:
     with _connect() as conn:
         row = conn.execute("SELECT 1 FROM assessments WHERE url = ?", (url,)).fetchone()
     return row is not None
+
+
+def tracking_url_seen(url: str) -> bool:
+    """Return True if this tracking URL has already been processed in a previous run."""
+    with _connect() as conn:
+        row = conn.execute("SELECT 1 FROM seen_urls WHERE url = ?", (url,)).fetchone()
+    return row is not None
+
+
+def mark_url_seen(url: str) -> None:
+    """Record a tracking URL as processed so it can be skipped in future runs."""
+    with _connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO seen_urls (url, seen_at) VALUES (?, ?)",
+            (url, datetime.now().isoformat()),
+        )
 
 
 def load_assessments() -> list[Assessment]:
@@ -146,9 +228,16 @@ def load_assessments() -> list[Assessment]:
         d["job_title"] = d.get("job_title") or ""
         d["listing_text"] = d.get("listing_text") or ""
         d["job_summary"] = d.get("job_summary") or ""
+        d["domain_fit_reason"] = d.get("domain_fit_reason") or ""
+        d["role_fit_reason"] = d.get("role_fit_reason") or ""
+        d["gap_risk_reason"] = d.get("gap_risk_reason") or ""
+        d["fit_areas"] = json.loads(d.get("fit_areas") or "[]")
+        d["gaps"] = json.loads(d.get("gaps") or "[]")
         d["summary"] = json.loads(d.get("summary") or "[]")
         d["status"] = d.get("status") or "New"
+        d["rating"] = d.get("rating") or "new"
         d["hidden"] = bool(d.get("hidden", 0))
+        d["bookmarked"] = bool(d.get("bookmarked", 0))
         d["stars"] = d.get("stars")  # None = not yet rated
         results.append(Assessment(**d))
     return results

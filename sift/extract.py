@@ -1,13 +1,8 @@
-import os
 from typing import Literal
 
-import ollama
-from dotenv import load_dotenv
 from pydantic import BaseModel
 
-load_dotenv()
-
-MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
+from sift.llm import call_llm
 
 SYSTEM_PROMPT = """You are a precise text extraction assistant.
 Your first job is to determine whether the input actually contains a job listing.
@@ -40,17 +35,5 @@ class JobListing(BaseModel):
 
 def extract_listing(raw_text: str) -> JobListing:
     prompt = USER_PROMPT.format(raw_text=raw_text)
-
-    response = ollama.chat(
-        model=MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        format=JobListing.model_json_schema(),
-        options={"temperature": 0.1},
-    )
-    content = response.message.content
-    if not content:
-        raise ValueError("LLM did not return any content")
+    content = call_llm(SYSTEM_PROMPT, prompt, JobListing.model_json_schema(), temperature=0.1)
     return JobListing.model_validate_json(content)

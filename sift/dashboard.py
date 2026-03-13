@@ -1,16 +1,11 @@
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
-from sift.store import (
-    STATUS_PROGRESSION,
-    delete_assessment,
-    init_db,
-    load_assessments,
-    update_tags,
-)
+from sift.store import delete_assessment, init_db, load_assessments, update_rating
 
-st.set_page_config(page_title="⏳ Sift", layout="wide")
-st.title("⏳ Sift Job Listings")
+st.set_page_config(page_title="💘 Sifter", layout="wide")
+st.title("💘 Sifter")
 
 init_db()
 assessments = load_assessments()
@@ -27,26 +22,16 @@ SOURCE_DISPLAY = {
 SUGGESTION_ICON = {"apply": "🟢", "consider": "🟡", "skip": "🔴"}
 FIT_ICON = {"high": "🟢", "medium": "🟡", "low": "🔴"}
 GAP_ICON = {"high": "🔴", "medium": "🟡", "low": "🟢"}
-STATUS_ICON = {
-    "New": "✨",
-    "Researching": "🔵",
-    "Applied": "🟢",
-    "Rejected": "🔴",
-}
+RATING_ICON = {"new": "🆕", "liked": "👍", "disliked": "👎"}
 
 SUGGESTION_LABELS = {
     f"{SUGGESTION_ICON[v]} {v.title()}": v for v in ["apply", "consider", "skip"]
 }
 FIT_LABELS = {f"{FIT_ICON[v]} {v}": v for v in ["high", "medium", "low"]}
 GAP_LABELS = {f"{GAP_ICON[v]} {v}": v for v in ["high", "medium", "low"]}
-
-
-def _stars_display(v) -> str:
-    if v is None or pd.isna(v):
-        return ""
-    n = int(v) + 1
-    return "★" * n + "☆" * (5 - n)
-
+RATING_LABELS = {
+    f"{RATING_ICON[v]} {v.title()}": v for v in ["new", "liked", "disliked"]
+}
 
 raw_df = pd.DataFrame([a.model_dump() for a in assessments])
 raw_df["scraped_at"] = pd.to_datetime(raw_df["scraped_at"]).dt.strftime("%Y-%m-%d")
@@ -59,16 +44,18 @@ df["domain_fit"] = raw_df["domain_fit"].map(_DOT)
 df["role_fit"] = raw_df["role_fit"].map(_DOT)
 df["gap_risk"] = raw_df["gap_risk"].map(_DOT_INV)
 df["source"] = df["source"].map(lambda v: SOURCE_DISPLAY.get(v, v.title()))
-df["status"] = raw_df["status"].map(
-    lambda v: f"{STATUS_ICON.get(v, '')} {v}" if v else "✨ New"
-)
-df["stars"] = raw_df["stars"].apply(_stars_display)
+df["rating"] = raw_df["rating"].map(lambda v: RATING_ICON.get(v, "🆕"))
 
 # --- Sidebar filters ---
 st.sidebar.header("Filters")
 
-search = st.sidebar.text_input("Search", placeholder="employer, title, reasoning...")
-
+# Predefined pills for ratings, suggestions, fits, and gap risk
+rating_labels = st.sidebar.pills(
+    "Rating",
+    options=list(RATING_LABELS),
+    default=[k for k, v in RATING_LABELS.items() if v in ("new", "liked")],
+    selection_mode="multi",
+) or list(RATING_LABELS)
 suggestion_labels = st.sidebar.pills(
     "Suggestion",
     options=list(SUGGESTION_LABELS),
@@ -93,15 +80,13 @@ gap_risk_labels = st.sidebar.pills(
     default=list(GAP_LABELS),
     selection_mode="multi",
 )
-status_filter = st.sidebar.pills(
-    "Status",
-    options=STATUS_PROGRESSION,
-    default=STATUS_PROGRESSION,
-    selection_mode="multi",
-) or list(STATUS_PROGRESSION)
 
-show_hidden = st.sidebar.checkbox("Show hidden entries", value=False)
+# Search box for employer, title, or reasoning text
+search = st.sidebar.text_input(
+    "Search", placeholder="Employer, job title, listing, ..."
+)
 
+# Multi-select filters for employer and job title, populated from the dataset
 employers = sorted([e for e in raw_df["employer"].unique() if e])
 selected_employers = (
     (
@@ -136,15 +121,14 @@ selected_titles = (
 suggestions = [SUGGESTION_LABELS[l] for l in suggestion_labels]
 domain_fits = [FIT_LABELS[l] for l in domain_fit_labels]
 role_fits = [FIT_LABELS[l] for l in role_fit_labels]
+ratings = [RATING_LABELS[l] for l in rating_labels]
 
 mask = (
     raw_df["suggestion"].isin(suggestions)
     & raw_df["domain_fit"].isin(domain_fits)
     & raw_df["role_fit"].isin(role_fits)
-    & raw_df["status"].isin(status_filter)
+    & raw_df["rating"].isin(ratings)
 )
-if not show_hidden:
-    mask &= ~raw_df["hidden"].astype(bool)
 if selected_employers:
     mask &= raw_df["employer"].isin(selected_employers)
 if selected_titles:
@@ -155,6 +139,7 @@ if search:
         raw_df["employer"].str.lower().str.contains(sl, na=False)
         | raw_df["job_title"].str.lower().str.contains(sl, na=False)
         | raw_df["reasoning"].str.lower().str.contains(sl, na=False)
+        | raw_df["listing_text"].str.lower().str.contains(sl, na=False)
     )
 
 filtered = df[mask].reset_index(drop=True)
@@ -164,24 +149,32 @@ st.caption(f"{len(filtered)} of {len(df)} assessments shown")
 
 # --- Table ---
 TABLE_COLS = [
+    "rating",
     "suggestion",
     "employer",
     "job_title",
     "domain_fit",
     "role_fit",
     "gap_risk",
-    "status",
-    "stars",
     "scraped_at",
     "url",
 ]
 
 selected_url = st.session_state.get("selected_url")
-table_height = 280 if selected_url else 560
+
+# Auto-select first visible row if nothing is selected
+if not selected_url and not filtered_raw.empty:
+    selected_url = filtered_raw.iloc[0]["url"]
+    st.session_state["selected_url"] = selected_url
+
+_ROW_H = 35
+_HEADER_H = 38
+table_height = min(len(filtered) * _ROW_H + _HEADER_H, 280 if selected_url else 560)
 
 selection = st.dataframe(
     filtered[TABLE_COLS],
     column_config={
+        "rating": st.column_config.TextColumn("Rating"),
         "suggestion": st.column_config.TextColumn(
             "Suggestion",
             help="LLM recommendation: apply, consider, or skip. Advisory only.",
@@ -200,9 +193,6 @@ selection = st.dataframe(
             "Gap",
             help="Gap risk (inverted): 🟢 low risk · 🟡 medium · 🔴 high risk",
         ),
-        "status": st.column_config.TextColumn("Status"),
-        "stars": st.column_config.TextColumn("Stars"),
-        "source": st.column_config.TextColumn("Source"),
         "scraped_at": st.column_config.TextColumn("Date"),
         "url": st.column_config.LinkColumn(
             "Link",
@@ -216,20 +206,17 @@ selection = st.dataframe(
     on_select="rerun",
 )
 
-# When a table row is clicked, update selected_url and clear widget state for
-# that URL so segmented_control/toggle/feedback initialise from DB values.
+# When a table row is clicked, update selected_url.
 selected_rows = selection.selection.rows
-if selected_rows:
+if selected_rows and not st.session_state.pop("_from_nav", False):
     clicked_url = filtered_raw.iloc[selected_rows[0]]["url"]
     if clicked_url != selected_url:
-        for key in (
-            f"status_{clicked_url}",
-            f"hidden_{clicked_url}",
-            f"stars_{clicked_url}",
-        ):
-            st.session_state.pop(key, None)
         st.session_state["selected_url"] = clicked_url
         selected_url = clicked_url
+
+# Show queued toast (set before a st.rerun() call)
+if "_toast" in st.session_state:
+    st.toast(st.session_state.pop("_toast"))
 
 # --- Detail panel ---
 if selected_url:
@@ -240,89 +227,188 @@ if selected_url:
         row = matches.iloc[0]
         st.divider()
 
-        st.markdown(f"### {row['job_title']}")
-        st.markdown(f"#### {row['employer']}")
+        # Prev / Next + quick-rate navigation row
+        _pos = filtered_raw.index[filtered_raw["url"] == selected_url]
+        _pos = int(_pos[0]) if len(_pos) else 0
+        _total = len(filtered_raw)
+        _next_url = filtered_raw.iloc[_pos + 1]["url"] if _pos < _total - 1 else None
 
-        col1, col2 = st.columns([2, 1])
+        _, _nav = st.columns([2, 1], gap="large")
+        with _nav:
+            _pc, _mc, _nc, _gap, _bc, _hc = st.columns([1, 1.5, 1, 0.3, 1, 1])
+            with _pc:
+                if st.button("‹", disabled=_pos == 0, use_container_width=True):
+                    st.session_state["selected_url"] = filtered_raw.iloc[_pos - 1][
+                        "url"
+                    ]
+                    st.session_state["_from_nav"] = True
+                    st.rerun()
+            with _mc:
+                st.markdown(
+                    f"<p style='text-align:center;padding-top:4px;font-size:0.85rem'>{_pos + 1} / {_total}</p>",
+                    unsafe_allow_html=True,
+                )
+            with _nc:
+                if st.button(
+                    "›", disabled=_pos >= _total - 1, use_container_width=True
+                ):
+                    st.session_state["selected_url"] = filtered_raw.iloc[_pos + 1][
+                        "url"
+                    ]
+                    st.session_state["_from_nav"] = True
+                    st.rerun()
+            _current_rating = row["rating"]
+            with _bc:
+                if st.button(
+                    "👍",
+                    type="primary" if _current_rating == "liked" else "secondary",
+                    use_container_width=True,
+                    help="Like (b)",
+                ):
+                    new_r = "new" if _current_rating == "liked" else "liked"
+                    update_rating(selected_url, new_r)
+                    st.session_state["_toast"] = (
+                        "Liked 👍" if new_r == "liked" else "Removed 👍"
+                    )
+                    if _next_url and new_r == "liked":
+                        st.session_state["selected_url"] = _next_url
+                        st.session_state["_from_nav"] = True
+                    st.rerun()
+            with _hc:
+                if st.button(
+                    "👎",
+                    type="primary" if _current_rating == "disliked" else "secondary",
+                    use_container_width=True,
+                    help="Dislike (x)",
+                ):
+                    new_r = "new" if _current_rating == "disliked" else "disliked"
+                    update_rating(selected_url, new_r)
+                    st.session_state["_toast"] = (
+                        "Hidden 👎" if new_r == "disliked" else "Removed 👎"
+                    )
+                    if _next_url and new_r == "disliked":
+                        st.session_state["selected_url"] = _next_url
+                        st.session_state["_from_nav"] = True
+                    st.rerun()
+
+        col1, col2 = st.columns([2, 1], gap="large")
 
         with col1:
+            st.markdown(f"### {row['job_title']}")
+            st.markdown(f"#### {row['employer']}")
+
             if row.get("job_summary"):
                 st.caption(row["job_summary"])
-            with st.expander("Original Job Listing", expanded=True):
+            with st.container(border=True):
                 if row.get("listing_text"):
                     st.markdown(row["listing_text"])
                 else:
                     st.caption("No listing text available.")
 
-            st.subheader("AI Assessment")
-            st.markdown(row["reasoning"])
-            summary = row.get("summary") or []
-            if summary:
-                st.markdown("\n".join(f"- {b}" for b in summary))
-
         with col2:
-            current_status = row["status"]
-            current_hidden = row["hidden"]
-            current_stars = row["stars"]
-
-            # st.feedback has no default param — initialise from DB via session state
-            star_key = f"stars_{selected_url}"
-            if star_key not in st.session_state and current_stars is not None:
-                st.session_state[star_key] = current_stars
-
-            new_status = st.segmented_control(
-                "Status",
-                options=STATUS_PROGRESSION,
-                default=current_status,
-                key=f"status_{selected_url}",
-                width="content",
+            st.markdown(
+                "### {} Suggestion: {}".format(
+                    SUGGESTION_ICON.get(row["suggestion"], ""),
+                    row["suggestion"].title(),
+                )
             )
+            st.caption(row["reasoning"])
 
-            st.caption("Your rating")
-            new_stars = st.feedback("stars", key=star_key)
+            st.markdown("#### Fit analysis")
+            st.markdown(
+                f"**{FIT_ICON.get(row['domain_fit'], '')} Domain fit: {row['domain_fit'].title()}**"
+            )
+            if row.get("domain_fit_reason"):
+                st.caption(row["domain_fit_reason"])
+            st.markdown(
+                f"**{FIT_ICON.get(row['role_fit'], '')} Role fit: {row['role_fit'].title()}**"
+            )
+            if row.get("role_fit_reason"):
+                st.caption(row["role_fit_reason"])
+            st.markdown(
+                f"**{GAP_ICON.get(row['gap_risk'], '')} Gap risk: {row['gap_risk'].title()}**"
+            )
+            if row.get("gap_risk_reason"):
+                st.caption(row["gap_risk_reason"])
 
-            # Auto-save status and stars on change
-            if (
-                new_status is not None and new_status != current_status
-            ) or new_stars != current_stars:
-                update_tags(
-                    selected_url,
-                    new_status or current_status,
-                    current_hidden,
-                    new_stars,
+            with st.expander("Show details", expanded=False):
+                fit_areas = row.get("fit_areas") or []
+                gaps = row.get("gaps") or []
+                SEVERITY_ICON = {"minor": "🟡", "manageable": "🟠", "severe": "🔴"}
+                if fit_areas:
+                    st.markdown("**Concrete Overlap**")
+                    for area in fit_areas:
+                        st.caption(f"- {area}")
+                if gaps:
+                    st.markdown("**Concrete Gaps**")
+                    for gap in gaps:
+                        icon = SEVERITY_ICON.get(gap.get("severity", ""), "")
+                        st.caption(f"- {icon} {gap['description']}")
+
+            st.divider()
+            source_col, date_col = st.columns(2)
+            with source_col:
+                st.write(
+                    f"**Source:** {SOURCE_DISPLAY.get(row['source'], row['source'].title())}"
+                )
+            with date_col:
+                st.write(f"**Date:** {row['scraped_at']}")
+            url = row["url"]
+            if url:
+                st.link_button(
+                    "Open original listing",
+                    url,
+                    icon=":material/open_in_new:",
+                    type="secondary",
+                    width="stretch",
                 )
 
             st.divider()
-            url = row["url"]
-            short_url = (url[:60] + "…") if len(url) > 60 else url
-            st.write(
-                f"**Source:** {SOURCE_DISPLAY.get(row['source'], row['source'].title())}"
-            )
-            st.write(f"**Language:** {row['language']}")
-            st.write(f"**Date:** {row['scraped_at']}")
-            st.write(f"**Link:** [{short_url}]({url})")
-
-            st.divider()
-            st.caption(
-                "Hide or delete entries. "
-                "Hidden entries can be shown via a toggle in the sidebar. "
-                "Deleted entries are removed for good."
-            )
-            hide_col, delete_col = st.columns(2)
-            with hide_col:
-                hide_label = "Unhide" if current_hidden else "Hide"
-                if st.button(hide_label, key="hide_btn", width="stretch"):
-                    update_tags(
-                        selected_url, current_status, not current_hidden, current_stars
-                    )
-                    st.rerun()
-            with delete_col:
-                if st.button("🗑 Delete", key="delete_btn", width="stretch"):
-                    st.session_state["confirm_delete"] = selected_url
+            if st.button(
+                "Delete listing from database",
+                key="delete_btn",
+                width="stretch",
+                type="secondary",
+            ):
+                st.session_state["confirm_delete"] = selected_url
             if st.session_state.get("confirm_delete") == selected_url:
                 st.warning("This will permanently delete this entry.")
-                if st.button("Confirm delete", key="confirm_btn"):
+                if st.button(
+                    "Confirm delete", key="confirm_btn", width="stretch", type="primary"
+                ):
                     delete_assessment(selected_url)
                     st.session_state.pop("confirm_delete", None)
                     st.session_state.pop("selected_url", None)
                     st.rerun()
+
+# Keyboard navigation: arrow keys and k/l move through listings; b/x for like/dislike.
+# Injected into the parent frame; deduplication guard prevents stacking listeners on reruns.
+components.html(
+    """
+    <script>
+    (function () {
+        var win = window.parent;
+        if (win._sift_nav_bound) return;
+        win._sift_nav_bound = true;
+        win.document.addEventListener('keydown', function (e) {
+            var active = win.document.activeElement;
+            if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
+            var label = null;
+            if (e.key === 'ArrowLeft'  || e.key === 'k') label = '\u2039';
+            if (e.key === 'ArrowRight' || e.key === 'l') label = '\u203a';
+            if (e.key === 'b') label = '👍';
+            if (e.key === 'x') label = '👎';
+            if (!label) return;
+            var buttons = win.document.querySelectorAll('button');
+            for (var i = 0; i < buttons.length; i++) {
+                if (buttons[i].innerText.trim() === label && !buttons[i].disabled) {
+                    buttons[i].click();
+                    return;
+                }
+            }
+        });
+    })();
+    </script>
+    """,
+    height=0,
+)
