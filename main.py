@@ -37,6 +37,7 @@ def main():
     parser = argparse.ArgumentParser(description="Sift — automated job ad screening")
     parser.add_argument("--days", type=int, default=3, help="Fetch emails from the last N days (default: 3)")
     parser.add_argument("--unread", action="store_true", help="Only process unread emails")
+    parser.add_argument("--url", action="append", dest="urls", metavar="URL", help="Process a specific URL directly (can be repeated)")
     parser.add_argument("--login-linkedin", action="store_true", help="Open a browser to log in to LinkedIn and save the session")
     parser.add_argument("--force", action="store_true", help="Process all URLs, ignoring the seen-URL cache")
     parser.add_argument("--mark-read", action="store_true", help="Mark fetched emails as read after processing")
@@ -48,26 +49,31 @@ def main():
 
     init_db()
 
-    if args.unread:
+    if args.urls:
+        job_urls = [(url, "manual") for url in args.urls]
+        print(f"Processing {len(job_urls)} manually provided URL(s)\n")
+    elif args.unread:
         print("Fetching job URLs from unread emails...")
         job_urls = fetch_job_urls(unread_only=True, mark_read=args.mark_read)
+        print(f"Found {len(job_urls)} URL(s) across all sources\n")
     else:
         since = date.today() - timedelta(days=args.days)
         print(f"Fetching job URLs from emails since {since}...")
         job_urls = fetch_job_urls(since=since, mark_read=args.mark_read)
-    print(f"Found {len(job_urls)} URL(s) across all sources\n")
+        print(f"Found {len(job_urls)} URL(s) across all sources\n")
 
     seen_canonical: set[str] = set()
     new_count = 0
     skip_count = 0
+    total = len(job_urls)
 
-    for tracking_url, source in job_urls:
+    for i, (tracking_url, source) in enumerate(job_urls, 1):
         if not args.force and tracking_url_seen(tracking_url):
-            print(f"[{source}] Already processed — skipping {tracking_url[:60]}")
+            print(f"[{i}/{total}] [{source}] Already processed — skipping {tracking_url[:60]}")
             skip_count += 1
             continue
 
-        print(f"[{source}] Scraping {tracking_url[:60]}...")
+        print(f"[{i}/{total}] [{source}] Scraping {tracking_url[:60]}...")
 
         try:
             job_text, canonical_url = scrape_job_page(tracking_url)
