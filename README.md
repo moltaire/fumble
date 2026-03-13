@@ -31,9 +31,9 @@ IMAP_HOST=imap.example.com
 IMAP_EMAIL=you@example.com
 IMAP_PASSWORD=yourpassword
 
-# LLM — defaults to Ollama with llama3.2
+# LLM — defaults to Ollama with llama3.1:8b
 LLM_PROVIDER=ollama        # ollama | openai | anthropic
-LLM_MODEL=qwen3:14b
+LLM_MODEL=qwen3.5:9b
 ```
 
 Edit `resources/sources.toml` to configure which email folders to scan and what URL patterns to extract.
@@ -64,6 +64,8 @@ python main.py [options]
 | `--unread` | off | Only process unread emails |
 | `--url URL` | — | Process a specific URL directly, bypassing email fetch (can be repeated) |
 | `--force` | off | Ignore the seen-URL cache and reprocess all fetched URLs |
+| `--reassess` | off | Re-run LLM fit assessment on all stored listings without re-scraping; preserves ratings |
+| `--clear-ratings` | off | Reset all user ratings to `new` (prompts for confirmation) |
 | `--mark-read` | off | Mark fetched emails as read after processing |
 | `--login-linkedin` | off | Open a headed browser to log in to LinkedIn and save the session |
 
@@ -76,7 +78,7 @@ streamlit run sift/dashboard.py
 The dashboard lets you:
 - Filter by recommendation (apply / consider / skip), domain fit, role fit, gap risk, rating, employer, and job title
 - View the full job listing alongside the structured AI assessment — fit areas, gaps with severity, and per-dimension explanations
-- Quickly rate entries with 👍 (like) or 👎 (dislike) using buttons or keyboard shortcuts (`b` / `x`); use `←` / `→` (or `k` / `l`) to move between listings
+- Rate entries with 🌟 (superlike), 👍 (like), or 👎 (dislike) using buttons or keyboard shortcuts (`s` / `b` / `x`); use `←` / `→` (or `k` / `l`) to move between listings
 - Permanently delete entries
 
 ## LLM providers
@@ -85,7 +87,7 @@ Sift supports Ollama (local), OpenAI, and Anthropic via the `LLM_PROVIDER` and `
 
 | Provider | Example model | Notes |
 |---|---|---|
-| `ollama` | `qwen3:14b` | Default. Runs locally, no API cost. |
+| `ollama` | `qwen3.5:14b` | Default. Runs locally, no API cost. |
 | `openai` | `gpt-4o` | Requires `OPENAI_API_KEY` |
 | `anthropic` | `claude-opus-4-6` | Requires `ANTHROPIC_API_KEY` |
 

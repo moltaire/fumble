@@ -42,13 +42,14 @@ if not assessments:
 
 with open("resources/sources.toml", "rb") as _f:
     import tomllib as _tomllib
+
     _sources = _tomllib.load(_f)["sources"]
 SOURCE_DISPLAY = {s["name"]: s.get("display", s["name"].title()) for s in _sources}
 SOURCE_DISPLAY.setdefault("manual-test", "Manual")
 SUGGESTION_ICON = {"apply": "🟢", "consider": "🟡", "skip": "🔴"}
 FIT_ICON = {"high": "🟢", "medium": "🟡", "low": "🔴"}
 GAP_ICON = {"high": "🔴", "medium": "🟡", "low": "🟢"}
-RATING_ICON = {"new": "✨", "liked": "👍", "disliked": "👎"}
+RATING_ICON = {"new": "✨", "superliked": "🌟", "liked": "👍", "disliked": "👎"}
 
 SUGGESTION_LABELS = {
     f"{SUGGESTION_ICON[v]} {v.title()}": v for v in ["apply", "consider", "skip"]
@@ -56,7 +57,8 @@ SUGGESTION_LABELS = {
 FIT_LABELS = {f"{FIT_ICON[v]} {v}": v for v in ["high", "medium", "low"]}
 GAP_LABELS = {f"{GAP_ICON[v]} {v}": v for v in ["high", "medium", "low"]}
 RATING_LABELS = {
-    f"{RATING_ICON[v]} {v.title()}": v for v in ["new", "liked", "disliked"]
+    f"{RATING_ICON[v]} {v.title()}": v
+    for v in ["new", "superliked", "liked", "disliked"]
 }
 
 raw_df = pd.DataFrame([a.model_dump() for a in assessments])
@@ -89,7 +91,9 @@ st.sidebar.header("Filters")
 
 # Predefined pills for ratings, suggestions, fits, and gap risk
 _all_rating_keys = list(RATING_LABELS)
-_default_rating_keys = [k for k, v in RATING_LABELS.items() if v in ("new", "liked")]
+_default_rating_keys = [
+    k for k, v in RATING_LABELS.items() if v in ("new", "superliked", "liked")
+]
 _saved_rating_values = st.query_params.get_all("rating")  # ["new", "liked", ...]
 _initial_rating_keys = [
     k for k, v in RATING_LABELS.items() if v in _saved_rating_values
@@ -299,15 +303,15 @@ if selected_url:
         _total = len(filtered_raw)
         _next_url = filtered_raw.iloc[_pos + 1]["url"] if _pos < _total - 1 else None
 
-        _, _nav = st.columns([2, 1], gap="large")
+        _rating, _nav = st.columns([2, 1], gap="large")
         with _nav:
-            _pc, _mc, _nc, _gap, _bc, _hc = st.columns([1, 1.5, 1, 0.3, 1, 1])
+            _pc, _mc, _nc = st.columns([1, 1, 1])
             with _pc:
                 if st.button(
                     "‹",
                     disabled=_pos == 0,
                     use_container_width=True,
-                    help="Previous (Keyboard shortcut: Left Arrow or K)",
+                    help="Previous (Keyboard shortcut: Left Arrow or J)",
                 ):
                     st.session_state["selected_url"] = filtered_raw.iloc[_pos - 1][
                         "url"
@@ -315,8 +319,8 @@ if selected_url:
                     st.session_state["_from_nav"] = True
                     st.rerun()
             with _mc:
-                st.markdown(
-                    f"<p style='text-align:center;padding-top:4px;font-size:0.85rem'>{_pos + 1} / {_total}</p>",
+                st.caption(
+                    f"<p style='text-align:center;padding-top:8px;font-size:0.85rem'>{_pos + 1} / {_total}</p>",
                     unsafe_allow_html=True,
                 )
             with _nc:
@@ -324,23 +328,43 @@ if selected_url:
                     "›",
                     disabled=_pos >= _total - 1,
                     use_container_width=True,
-                    help="Next (Keyboard shortcut: Right Arrow or L)",
+                    help="Next (Keyboard shortcut: Right Arrow or K)",
                 ):
                     st.session_state["selected_url"] = filtered_raw.iloc[_pos + 1][
                         "url"
                     ]
                     st.session_state["_from_nav"] = True
                     st.rerun()
+        with _rating:
+            _hc, _bc, _sc = st.columns([1, 1, 1])
             _current_rating = row["rating"]
+            with _sc:
+                if st.button(
+                    "🌟",
+                    type="primary" if _current_rating == "superliked" else "secondary",
+                    use_container_width=True,
+                    help="Superlike (Keyboard shortcut: 3)",
+                ):
+                    new_r = "new" if _current_rating == "superliked" else "superliked"
+                    update_rating(selected_url, new_r)
+                    _load_assessments.clear()
+                    st.session_state["_toast"] = (
+                        "🌟 Superliked" if new_r == "superliked" else "🌟 Removed"
+                    )
+                    if _next_url and new_r == "superliked":
+                        st.session_state["selected_url"] = _next_url
+                        st.session_state["_from_nav"] = True
+                    st.rerun()
             with _bc:
                 if st.button(
                     "👍",
                     type="primary" if _current_rating == "liked" else "secondary",
                     use_container_width=True,
-                    help="Like (Keyboard shortcut: B)",
+                    help="Like (Keyboard shortcut: 2)",
                 ):
                     new_r = "new" if _current_rating == "liked" else "liked"
                     update_rating(selected_url, new_r)
+                    _load_assessments.clear()
                     st.session_state["_toast"] = (
                         "👍 Liked" if new_r == "liked" else "👍 Removed"
                     )
@@ -353,10 +377,11 @@ if selected_url:
                     "👎",
                     type="primary" if _current_rating == "disliked" else "secondary",
                     use_container_width=True,
-                    help="Dislike (Keyboard shortcut: X)",
+                    help="Dislike (Keyboard shortcut: 1)",
                 ):
                     new_r = "new" if _current_rating == "disliked" else "disliked"
                     update_rating(selected_url, new_r)
+                    _load_assessments.clear()
                     st.session_state["_toast"] = (
                         "👎 Hidden" if new_r == "disliked" else "👎 Removed"
                     )
@@ -451,11 +476,12 @@ if selected_url:
                     "Confirm delete", key="confirm_btn", width="stretch", type="primary"
                 ):
                     delete_assessment(selected_url)
+                    _load_assessments.clear()
                     st.session_state.pop("confirm_delete", None)
                     st.session_state.pop("selected_url", None)
                     st.rerun()
 
-# Keyboard navigation: arrow keys and k/l move through listings; b/x for like/dislike.
+# Keyboard navigation: arrow keys / j/k move through listings; 1/2/3 for ratings.
 # Injected into the parent frame; deduplication guard prevents stacking listeners on reruns.
 components.html(
     """
@@ -468,10 +494,11 @@ components.html(
             var active = win.document.activeElement;
             if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable)) return;
             var label = null;
-            if (e.key === 'ArrowLeft'  || e.key === 'k') label = '\u2039';
-            if (e.key === 'ArrowRight' || e.key === 'l') label = '\u203a';
-            if (e.key === 'b') label = '👍';
-            if (e.key === 'x') label = '👎';
+            if (e.key === 'ArrowLeft'  || e.key === 'j') label = '\u2039';
+            if (e.key === 'ArrowRight' || e.key === 'k') label = '\u203a';
+            if (e.key === '3') label = '🌟';
+            if (e.key === '2') label = '👍';
+            if (e.key === '1') label = '👎';
             if (!label) return;
             var buttons = win.document.querySelectorAll('button');
             for (var i = 0; i < buttons.length; i++) {

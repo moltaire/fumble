@@ -74,11 +74,6 @@ class Assessment(JobListing, FitResult):
     source: str
     scraped_at: datetime
     rating: str = "new"  # new | liked | disliked
-    status: str = "New"
-    hidden: bool = False
-    bookmarked: bool = False
-    stars: int | None = None
-    summary: list[str] = []  # kept for backward compatibility with old records
 
 
 def assess_fit(

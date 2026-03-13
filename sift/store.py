@@ -7,8 +7,6 @@ from sift.assess import Assessment
 
 DB_PATH = Path("data/sift.db")
 
-STATUS_PROGRESSION = ["New", "Researching", "Applied", "Rejected"]
-
 
 def _connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(exist_ok=True)
@@ -36,11 +34,8 @@ def init_db() -> None:
                 gap_risk     TEXT,
                 job_summary  TEXT,
                 reasoning    TEXT,
-                summary      TEXT DEFAULT '[]',
                 suggestion   TEXT,
-                status       TEXT DEFAULT 'New',
-                hidden       INTEGER DEFAULT 0,
-                stars        INTEGER
+                rating       TEXT DEFAULT 'new'
             )
         """
         )
@@ -57,16 +52,12 @@ def init_db() -> None:
             "employer TEXT",
             "job_title TEXT",
             "listing_text TEXT",
-            "hidden INTEGER DEFAULT 0",
-            "stars INTEGER",
-            "summary TEXT DEFAULT '[]'",
             "job_summary TEXT",
             "domain_fit_reason TEXT",
             "role_fit_reason TEXT",
             "gap_risk_reason TEXT",
             "fit_areas TEXT DEFAULT '[]'",
             "gaps TEXT DEFAULT '[]'",
-            "bookmarked INTEGER DEFAULT 0",
             "rating TEXT DEFAULT 'new'",
         ]:
             try:
@@ -74,30 +65,16 @@ def init_db() -> None:
             except sqlite3.OperationalError:
                 pass
 
-        # Migrate bookmarked/hidden → rating
-        conn.execute(
-            "UPDATE assessments SET rating = 'liked' WHERE bookmarked = 1 AND (rating IS NULL OR rating = 'new')"
-        )
-        conn.execute(
-            "UPDATE assessments SET rating = 'disliked' WHERE hidden = 1 AND bookmarked = 0 AND (rating IS NULL OR rating = 'new')"
-        )
-
-        # Migrate status from old JSON list format → plain string + hidden flag
-        rows = conn.execute(
-            "SELECT url, status FROM assessments WHERE status LIKE '[%'"
-        ).fetchall()
-        for row in rows:
-            try:
-                tags = json.loads(row["status"])
-                new_status = next((t for t in tags if t in STATUS_PROGRESSION), "New")
-                new_hidden = 1 if any(t in ("Hidden", "Hide") for t in tags) else 0
-            except (json.JSONDecodeError, Exception):
-                new_status = "New"
-                new_hidden = 0
+        # Migrate bookmarked/hidden → rating (for older databases that have these columns)
+        try:
             conn.execute(
-                "UPDATE assessments SET status = ?, hidden = ? WHERE url = ?",
-                (new_status, new_hidden, row["url"]),
+                "UPDATE assessments SET rating = 'liked' WHERE bookmarked = 1 AND (rating IS NULL OR rating = 'new')"
             )
+            conn.execute(
+                "UPDATE assessments SET rating = 'disliked' WHERE hidden = 1 AND bookmarked = 0 AND (rating IS NULL OR rating = 'new')"
+            )
+        except sqlite3.OperationalError:
+            pass
 
 
 def save_assessment(a: Assessment) -> None:
@@ -108,9 +85,8 @@ def save_assessment(a: Assessment) -> None:
             INSERT OR IGNORE INTO assessments
                 (url, source, scraped_at, employer, job_title, language, listing_text,
                  job_summary, domain_fit, domain_fit_reason, role_fit, role_fit_reason,
-                 gap_risk, gap_risk_reason, fit_areas, gaps, reasoning, summary,
-                 suggestion, status, hidden, stars)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 gap_risk, gap_risk_reason, fit_areas, gaps, reasoning, suggestion)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 a.url,
@@ -130,11 +106,7 @@ def save_assessment(a: Assessment) -> None:
                 json.dumps(a.fit_areas),
                 json.dumps([g.model_dump() for g in a.gaps]),
                 a.reasoning,
-                json.dumps(a.summary),
                 a.suggestion,
-                a.status,
-                int(a.hidden),
-                a.stars,
             ),
         )
 
@@ -148,7 +120,7 @@ def update_assessment(a: Assessment) -> None:
                 source = ?, scraped_at = ?, employer = ?, job_title = ?, language = ?,
                 listing_text = ?, job_summary = ?, domain_fit = ?, domain_fit_reason = ?,
                 role_fit = ?, role_fit_reason = ?, gap_risk = ?, gap_risk_reason = ?,
-                fit_areas = ?, gaps = ?, reasoning = ?, summary = ?, suggestion = ?
+                fit_areas = ?, gaps = ?, reasoning = ?, suggestion = ?
             WHERE url = ?
         """,
             (
@@ -168,7 +140,6 @@ def update_assessment(a: Assessment) -> None:
                 json.dumps(a.fit_areas),
                 json.dumps([g.model_dump() for g in a.gaps]),
                 a.reasoning,
-                json.dumps(a.summary),
                 a.suggestion,
                 a.url,
             ),
@@ -182,6 +153,13 @@ def update_rating(url: str, rating: str) -> None:
             "UPDATE assessments SET rating = ? WHERE url = ?",
             (rating, url),
         )
+
+
+def clear_ratings() -> int:
+    """Reset all user ratings to 'new'. Returns the number of affected rows."""
+    with _connect() as conn:
+        cur = conn.execute("UPDATE assessments SET rating = 'new' WHERE rating != 'new'")
+        return cur.rowcount
 
 
 def delete_assessment(url: str) -> None:
@@ -233,11 +211,9 @@ def load_assessments() -> list[Assessment]:
         d["gap_risk_reason"] = d.get("gap_risk_reason") or ""
         d["fit_areas"] = json.loads(d.get("fit_areas") or "[]")
         d["gaps"] = json.loads(d.get("gaps") or "[]")
-        d["summary"] = json.loads(d.get("summary") or "[]")
-        d["status"] = d.get("status") or "New"
         d["rating"] = d.get("rating") or "new"
-        d["hidden"] = bool(d.get("hidden", 0))
-        d["bookmarked"] = bool(d.get("bookmarked", 0))
-        d["stars"] = d.get("stars")  # None = not yet rated
+        # Drop legacy columns that may still exist in older databases
+        for key in ("status", "hidden", "bookmarked", "stars", "summary"):
+            d.pop(key, None)
         results.append(Assessment(**d))
     return results

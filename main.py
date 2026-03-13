@@ -7,7 +7,8 @@ from sift.assess import assess_fit
 from sift.email_fetch import fetch_job_urls
 from sift.extract import extract_listing
 from sift.scrape import login_flow, scrape_job_page
-from sift.store import init_db, mark_url_seen, save_assessment, update_assessment, tracking_url_seen, url_exists
+from sift.extract import JobListing
+from sift.store import clear_ratings, init_db, load_assessments, mark_url_seen, save_assessment, update_assessment, tracking_url_seen, url_exists
 
 PROFILE = Path("resources/profile.md").read_text()
 CRITERIA = Path("resources/search-criteria.md").read_text()
@@ -41,6 +42,8 @@ def main():
     parser.add_argument("--login-linkedin", action="store_true", help="Open a browser to log in to LinkedIn and save the session")
     parser.add_argument("--force", action="store_true", help="Process all URLs, ignoring the seen-URL cache")
     parser.add_argument("--mark-read", action="store_true", help="Mark fetched emails as read after processing")
+    parser.add_argument("--reassess", action="store_true", help="Re-run LLM assessment on all stored listings without re-scraping")
+    parser.add_argument("--clear-ratings", action="store_true", help="Reset all user ratings to 'new' (with confirmation)")
     args = parser.parse_args()
 
     if args.login_linkedin:
@@ -48,6 +51,49 @@ def main():
         return
 
     init_db()
+
+    if args.clear_ratings:
+        assessments = load_assessments()
+        superliked = sum(1 for a in assessments if a.rating == "superliked")
+        liked = sum(1 for a in assessments if a.rating == "liked")
+        disliked = sum(1 for a in assessments if a.rating == "disliked")
+        total_rated = superliked + liked + disliked
+        if total_rated == 0:
+            print("No ratings to clear.")
+            return
+        print(f"This will reset {total_rated} rating(s) to 'new' ({superliked} superliked, {liked} liked, {disliked} disliked).")
+        confirm = input("Type 'yes' to confirm: ").strip().lower()
+        if confirm == "yes":
+            n = clear_ratings()
+            print(f"Cleared {n} rating(s).")
+        else:
+            print("Aborted.")
+        return
+
+    if args.reassess:
+        assessments = load_assessments()
+        total = len(assessments)
+        print(f"Re-assessing {total} listing(s)...")
+        ok, failed = 0, 0
+        for i, a in enumerate(assessments, 1):
+            listing = JobListing(
+                is_job_listing=True,
+                employer=a.employer,
+                job_title=a.job_title,
+                language=a.language,
+                listing_text=a.listing_text,
+            )
+            print(f"[{i}/{total}] {a.employer} — {a.job_title}...")
+            try:
+                result = assess_fit(listing=listing, profile_text=PROFILE, criteria_text=CRITERIA, url=a.url, source=a.source)
+                update_assessment(result)
+                print(f"  [{result.suggestion}] {result.domain_fit}/{result.role_fit} — {result.job_summary}")
+                ok += 1
+            except Exception as e:
+                print(f"  Failed: {e}")
+                failed += 1
+        print(f"\nDone. {ok} re-assessed, {failed} failed.")
+        return
 
     if args.urls:
         job_urls = [(url, "manual") for url in args.urls]

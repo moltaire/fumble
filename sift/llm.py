@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
-MODEL = os.getenv("LLM_MODEL", "llama3.2")
+MODEL = os.getenv("LLM_MODEL", "llama3.1:8b")
 
 
 def call_llm(system: str, prompt: str, schema: dict, temperature: float = 0.1) -> str:
@@ -66,7 +66,8 @@ def _call_anthropic(system: str, prompt: str, schema: dict, temperature: float) 
     response = client.messages.create(
         model=MODEL,
         max_tokens=4096,
-        system=system + "\n\nRespond with a valid JSON object only. No prose, no markdown code fences.",
+        system=system
+        + "\n\nRespond with a valid JSON object only. No prose, no markdown code fences.",
         messages=[{"role": "user", "content": prompt}],
         temperature=temperature,
     )
