@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from fumble.extract import JobListing
-from fumble.llm import call_llm
+from fumble.llm import MODEL, PROVIDER, call_llm
 
 SYSTEM_PROMPT = """You are a precise job screening assistant.
 Assess how well a job listing matches a candidate's profile and search criteria.
@@ -73,6 +73,8 @@ class Assessment(JobListing, FitResult):
     url: str
     source: str
     scraped_at: datetime
+    assessed_at: datetime
+    assessed_model: str = ""
     rating: str = "new"  # new | liked | disliked
 
 
@@ -82,6 +84,7 @@ def assess_fit(
     criteria_text: str,
     url: str = "",
     source: str = "",
+    scraped_at: datetime | None = None,
 ) -> Assessment:
     prompt = USER_PROMPT.format(
         profile_text=profile_text,
@@ -96,10 +99,13 @@ def assess_fit(
     )
     fit = FitResult.model_validate_json(content)
 
+    now = datetime.now(timezone.utc)
     return Assessment(
         **listing.model_dump(exclude={"is_job_listing"}),
         **fit.model_dump(),
         url=url,
         source=source,
-        scraped_at=datetime.now(timezone.utc),
+        scraped_at=scraped_at or now,
+        assessed_at=now,
+        assessed_model=f"{PROVIDER}/{MODEL}",
     )

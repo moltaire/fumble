@@ -25,6 +25,7 @@ def init_db() -> None:
                 url          TEXT UNIQUE,
                 source       TEXT,
                 scraped_at   TEXT,
+                assessed_at  TEXT,
                 employer     TEXT,
                 job_title    TEXT,
                 language     TEXT,
@@ -59,6 +60,8 @@ def init_db() -> None:
             "fit_areas TEXT DEFAULT '[]'",
             "gaps TEXT DEFAULT '[]'",
             "rating TEXT DEFAULT 'new'",
+            "assessed_at TEXT",
+            "assessed_model TEXT DEFAULT ''",
         ]:
             try:
                 conn.execute(f"ALTER TABLE assessments ADD COLUMN {col}")
@@ -83,15 +86,18 @@ def save_assessment(a: Assessment) -> None:
         conn.execute(
             """
             INSERT OR IGNORE INTO assessments
-                (url, source, scraped_at, employer, job_title, language, listing_text,
-                 job_summary, domain_fit, domain_fit_reason, role_fit, role_fit_reason,
-                 gap_risk, gap_risk_reason, fit_areas, gaps, reasoning, suggestion)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (url, source, scraped_at, assessed_at, assessed_model, employer, job_title,
+                 language, listing_text, job_summary, domain_fit, domain_fit_reason,
+                 role_fit, role_fit_reason, gap_risk, gap_risk_reason, fit_areas, gaps,
+                 reasoning, suggestion)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 a.url,
                 a.source,
                 a.scraped_at.isoformat(),
+                a.assessed_at.isoformat(),
+                a.assessed_model,
                 a.employer,
                 a.job_title,
                 a.language,
@@ -117,15 +123,18 @@ def update_assessment(a: Assessment) -> None:
         conn.execute(
             """
             UPDATE assessments SET
-                source = ?, scraped_at = ?, employer = ?, job_title = ?, language = ?,
-                listing_text = ?, job_summary = ?, domain_fit = ?, domain_fit_reason = ?,
-                role_fit = ?, role_fit_reason = ?, gap_risk = ?, gap_risk_reason = ?,
-                fit_areas = ?, gaps = ?, reasoning = ?, suggestion = ?
+                source = ?, scraped_at = ?, assessed_at = ?, assessed_model = ?,
+                employer = ?, job_title = ?, language = ?, listing_text = ?,
+                job_summary = ?, domain_fit = ?, domain_fit_reason = ?, role_fit = ?,
+                role_fit_reason = ?, gap_risk = ?, gap_risk_reason = ?, fit_areas = ?,
+                gaps = ?, reasoning = ?, suggestion = ?
             WHERE url = ?
         """,
             (
                 a.source,
                 a.scraped_at.isoformat(),
+                a.assessed_at.isoformat(),
+                a.assessed_model,
                 a.employer,
                 a.job_title,
                 a.language,
@@ -202,6 +211,8 @@ def load_assessments() -> list[Assessment]:
     for row in rows:
         d = dict(row)
         d["scraped_at"] = datetime.fromisoformat(d["scraped_at"])
+        d["assessed_at"] = datetime.fromisoformat(d["assessed_at"]) if d.get("assessed_at") else d["scraped_at"]
+        d["assessed_model"] = d.get("assessed_model") or ""
         d["employer"] = d.get("employer") or ""
         d["job_title"] = d.get("job_title") or ""
         d["listing_text"] = d.get("listing_text") or ""

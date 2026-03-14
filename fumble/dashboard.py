@@ -10,6 +10,7 @@ from fumble.store import (
     update_rating,
 )
 
+st.set_option("client.toolbarMode", "viewer")
 st.set_page_config(page_title="Fumble", layout="wide", page_icon="💘")
 st.title("💘 Fumble")
 
@@ -81,10 +82,19 @@ _REFINE_DEFAULTS: dict = {
     "refine_gap_risk": list(GAP_LABELS),
     "filter_employers": [],
     "filter_titles": [],
+    "filter_scraped_after": None,
+    "filter_scraped_before": None,
+    "filter_assessed_after": None,
+    "filter_assessed_before": None,
 }
 
 raw_df = pd.DataFrame([a.model_dump() for a in assessments])
-raw_df["scraped_at"] = pd.to_datetime(raw_df["scraped_at"]).dt.strftime("%Y-%m-%d")
+raw_df["scraped_at"] = pd.to_datetime(raw_df["scraped_at"], utc=True).dt.strftime(
+    "%Y-%m-%d %H:%M"
+)
+raw_df["assessed_at"] = pd.to_datetime(raw_df["assessed_at"], utc=True).dt.strftime(
+    "%Y-%m-%d %H:%M"
+)
 
 df = raw_df.copy()
 df["suggestion"] = df["suggestion"].map(lambda v: f"{SUGGESTION_ICON[v]} {v.title()}")
@@ -122,6 +132,10 @@ if not _focus_mode:
         != set(GAP_LABELS)
         or bool(st.session_state.get("filter_employers"))
         or bool(st.session_state.get("filter_titles"))
+        or st.session_state.get("filter_scraped_after") is not None
+        or st.session_state.get("filter_scraped_before") is not None
+        or st.session_state.get("filter_assessed_after") is not None
+        or st.session_state.get("filter_assessed_before") is not None
     )
 
     _vcol, _right = st.columns([2, 1], gap="large")
@@ -202,6 +216,32 @@ if not _focus_mode:
                         key="filter_titles",
                     )
 
+            _dc1, _dc2, _dc3, _dc4 = st.columns(4)
+            with _dc1:
+                st.date_input(
+                    "Scraped after",
+                    value=st.session_state.get("filter_scraped_after"),
+                    key="filter_scraped_after",
+                )
+            with _dc2:
+                st.date_input(
+                    "Scraped before",
+                    value=st.session_state.get("filter_scraped_before"),
+                    key="filter_scraped_before",
+                )
+            with _dc3:
+                st.date_input(
+                    "Assessed after",
+                    value=st.session_state.get("filter_assessed_after"),
+                    key="filter_assessed_after",
+                )
+            with _dc4:
+                st.date_input(
+                    "Assessed before",
+                    value=st.session_state.get("filter_assessed_before"),
+                    key="filter_assessed_before",
+                )
+
             if st.button("Reset refinements", use_container_width=True):
                 st.session_state["_reset_refinements"] = True
                 st.rerun()
@@ -230,6 +270,10 @@ role_fits = [FIT_LABELS[l] for l in _role_keys]
 gap_risks = [GAP_LABELS[l] for l in _gap_keys]
 selected_employers = st.session_state.get("filter_employers") or []
 selected_titles = st.session_state.get("filter_titles") or []
+scraped_after = st.session_state.get("filter_scraped_after")
+scraped_before = st.session_state.get("filter_scraped_before")
+assessed_after = st.session_state.get("filter_assessed_after")
+assessed_before = st.session_state.get("filter_assessed_before")
 
 mask = (
     raw_df["rating"].isin(view_ratings)
@@ -242,6 +286,14 @@ if selected_employers:
     mask &= raw_df["employer"].isin(selected_employers)
 if selected_titles:
     mask &= raw_df["job_title"].isin(selected_titles)
+if scraped_after:
+    mask &= raw_df["scraped_at"] >= scraped_after.strftime("%Y-%m-%d")
+if scraped_before:
+    mask &= raw_df["scraped_at"] <= scraped_before.strftime("%Y-%m-%d 23:59")
+if assessed_after:
+    mask &= raw_df["assessed_at"] >= assessed_after.strftime("%Y-%m-%d")
+if assessed_before:
+    mask &= raw_df["assessed_at"] <= assessed_before.strftime("%Y-%m-%d 23:59")
 if search:
     sl = search.lower()
     mask &= (
@@ -295,6 +347,7 @@ TABLE_COLS = [
     "role_fit",
     "gap_risk",
     "scraped_at",
+    "assessed_at",
     "url",
 ]
 
@@ -313,7 +366,7 @@ if not _focus_mode:
             else (
                 "No disliked listings yet. Rate some listings and they will appear here."
                 if _current_view == "👎 Hidden"
-                else "You're all caught up! Check out your ⭐ Saved jobs, or run fumblebee fetch new ones."
+                else "You're all caught up! Check out your ⭐ Saved jobs, or run fumblebee to fetch new ones."
             )
         )
         st.info(_empty_msg)
@@ -350,7 +403,12 @@ if not _focus_mode:
                     help="Gap: 🟢 low · 🟡 medium · 🔴 high",
                     width=15,
                 ),
-                "scraped_at": st.column_config.TextColumn("Date"),
+                "scraped_at": st.column_config.TextColumn(
+                    "Scraped", help="When the listing was fetched"
+                ),
+                "assessed_at": st.column_config.TextColumn(
+                    "Assessed", help="When the LLM assessment was run"
+                ),
                 "url": st.column_config.LinkColumn(
                     "Link",
                     display_text="https?://(?:[a-zA-Z0-9-]+\\.)*([a-zA-Z0-9-]+\\.[a-zA-Z]{2,})",
@@ -494,20 +552,19 @@ if selected_url:
             st.space("stretch")
             source_col, date_col = st.columns(2)
             with source_col:
-                st.write(
-                    f"**Source:** {SOURCE_DISPLAY.get(row['source'], row['source'].title())}"
-                )
+                _source_label = SOURCE_DISPLAY.get(row["source"], row["source"].title())
+                _url = row["url"]
+                if _url:
+                    st.caption(
+                        f"**Source:** {_source_label} [:material/open_in_new:]({_url})",
+                        unsafe_allow_html=False,
+                    )
+                else:
+                    st.caption(f"**Source:** {_source_label}")
+                st.caption(f"**Model:** {row.get('assessed_model') or 'N/A'}")
             with date_col:
-                st.write(f"**Date:** {row['scraped_at']}")
-            url = row["url"]
-            if url:
-                st.link_button(
-                    "Open original listing",
-                    url,
-                    icon=":material/open_in_new:",
-                    type="secondary",
-                    width="stretch",
-                )
+                st.caption(f"**Scraped:** {row['scraped_at']}")
+                st.caption(f"**Assessed:** {row['assessed_at']}")
             st.space("stretch")
 
         # Listing and analysis

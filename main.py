@@ -1,5 +1,5 @@
 import argparse
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
@@ -85,7 +85,7 @@ def main():
             )
             print(f"[{i}/{total}] {a.employer} — {a.job_title}...")
             try:
-                result = assess_fit(listing=listing, profile_text=PROFILE, criteria_text=CRITERIA, url=a.url, source=a.source)
+                result = assess_fit(listing=listing, profile_text=PROFILE, criteria_text=CRITERIA, url=a.url, source=a.source, scraped_at=a.scraped_at)
                 update_assessment(result)
                 print(f"  [{result.suggestion}] {result.domain_fit}/{result.role_fit} — {result.job_summary}")
                 ok += 1
@@ -123,6 +123,7 @@ def main():
 
         try:
             job_text, canonical_url = scrape_job_page(tracking_url)
+            scraped_at = datetime.now(timezone.utc)
         except Exception as e:
             print(f"  Scrape failed: {e}")
             _log_failure(tracking_url, source, f"scrape_failed: {e}")
@@ -185,6 +186,7 @@ def main():
                 criteria_text=CRITERIA,
                 url=canonical_url,
                 source=source,
+                scraped_at=scraped_at,
             )
         except Exception as e:
             print(f"  Assessment failed: {e}")
