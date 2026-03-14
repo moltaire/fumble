@@ -56,7 +56,14 @@ LLM_PROVIDER=ollama        # ollama | openai | anthropic
 LLM_MODEL=qwen3.5:9b
 ```
 
-Edit `resources/sources.toml` to configure which email folders to scan and what URL patterns to extract.
+Edit `resources/sources.toml` to configure which email folders to scan and what URL patterns to extract. Each source maps an IMAP folder to a regex pattern matched against URLs found in emails. Currently configured sources:
+
+| Source | Notes |
+|---|---|
+| StepStone | Matches StepStone redirect links |
+| LinkedIn | Matches LinkedIn job alert emails; deduplicates by job ID |
+| GoodJobs | Matches Brevo tracking links |
+| Climatebase | Matches SendGrid tracking links |
 
 Copy `resources/profile.example.md` → `resources/profile.md` and `resources/search-criteria.example.md` → `resources/search-criteria.md`, then fill them in with your background and job search criteria. These files are gitignored so your personal details stay local.
 

@@ -16,3 +16,9 @@ folder = "Job Search/GoodJobs"
 name = "goodjobs"
 display = "GoodJobs"
 url_pattern = "brevo\\.net/tr/cl"
+
+[[sources]]
+folder = "Job Search/Climatebase"
+name = "climatebase"
+display = "Climatebase"
+url_pattern = "ct\\.sendgrid\\.net/ls/click"
