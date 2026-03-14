@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "sift"
+name = "fumble"
 version = "0.1.0"
-description = "Add your description here"
+description = "Dating-app-style job listing screener"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -17,3 +17,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "streamlit>=1.55.0",
 ]
+
+[project.scripts]
+fumblebee = "fumble.cli:main"
+fumble = "fumble.dashboard_cli:main"

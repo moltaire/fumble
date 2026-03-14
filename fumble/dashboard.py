@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from sift.store import (
+from fumble.store import (
     DB_PATH,
     delete_assessment,
     init_db,
@@ -10,11 +10,15 @@ from sift.store import (
     update_rating,
 )
 
-st.set_page_config(page_title="💘 Sifter", layout="wide")
-st.title("💘 Sifter")
+st.set_page_config(page_title="💘 Fumble", layout="wide")
+st.title("💘 Fumble")
 
-# Read focus mode from session state — the toggle widget sets this key on interaction
-_focus_mode = st.session_state.get("focus_mode", False)
+# Read focus mode from the widget key (updated by Streamlit before the script runs on toggle
+# interaction), falling back to a non-widget key for runs where the toggle wasn't rendered
+# (Streamlit clears widget-keyed session state when the widget is hidden).
+_focus_mode = st.session_state.get(
+    "focus_mode", st.session_state.get("_focus_persisted", False)
+)
 
 init_db()
 
@@ -38,7 +42,7 @@ _db_watcher()
 assessments = _load_assessments(st.session_state.get("_db_mtime"))
 
 if not assessments:
-    st.info("No listings yet. Run the pipeline first.")
+    st.info("No listings yet. Run fumblebee first.")
     st.stop()
 
 with open("resources/sources.toml", "rb") as _f:
@@ -250,6 +254,37 @@ if search:
 filtered = df[mask].reset_index(drop=True)
 filtered_raw = raw_df[mask].reset_index(drop=True)
 
+if _current_view == "⭐ Saved":
+    _fit_ord = {"high": 0, "medium": 1, "low": 2}
+    _sug_ord = {"apply": 0, "consider": 1, "skip": 2}
+    _gap_ord = {"low": 0, "medium": 1, "high": 2}
+    _sort_keys = pd.DataFrame(
+        {
+            "rating": filtered_raw["rating"].map({"superliked": 0, "liked": 1}),
+            "suggestion": filtered_raw["suggestion"].map(_sug_ord),
+            "scraped_at": filtered_raw["scraped_at"],
+            "domain_fit": filtered_raw["domain_fit"].map(_fit_ord),
+            "role_fit": filtered_raw["role_fit"].map(_fit_ord),
+            "gap_risk": filtered_raw["gap_risk"].map(_gap_ord),
+            "employer": filtered_raw["employer"].str.lower().fillna(""),
+        }
+    )
+    _order = _sort_keys.sort_values(
+        [
+            "rating",
+            "suggestion",
+            "scraped_at",
+            "domain_fit",
+            "role_fit",
+            "gap_risk",
+            "employer",
+        ],
+        ascending=[True, True, False, True, True, True, True],
+        kind="stable",
+    ).index
+    filtered = filtered.iloc[_order].reset_index(drop=True)
+    filtered_raw = filtered_raw.iloc[_order].reset_index(drop=True)
+
 # --- Table (hidden in focus mode) ---
 TABLE_COLS = [
     "rating",
@@ -278,7 +313,7 @@ if not _focus_mode:
             else (
                 "No disliked listings yet. Rate some listings and they will appear here."
                 if _current_view == "👎 Hidden"
-                else "No listings yet. Run the pipeline to fetch and assess new job postings."
+                else "You're all caught up! Check out your ⭐ Saved jobs, or run fumblebee fetch new ones."
             )
         )
         st.info(_empty_msg)
@@ -338,6 +373,10 @@ if not _focus_mode:
         st.caption(f"{len(filtered)} of {len(df)} listings")
 else:
     st.session_state.pop("_from_nav", None)
+    if filtered_raw.empty:
+        st.session_state["focus_mode"] = False
+        st.session_state["_focus_persisted"] = False
+        st.rerun()
 
 
 # --- Detail panel ---
@@ -393,7 +432,12 @@ if selected_url:
             # Toggle must render before any button that calls st.rerun(),
             # otherwise the RerunException stops the script before it registers.
             with _focus:
-                _focus_mode = st.toggle("Focus", key="focus_mode")
+                _focus_mode = st.toggle(
+                    "Focus",
+                    key="focus_mode",
+                    value=st.session_state.get("_focus_persisted", False),
+                )
+                st.session_state["_focus_persisted"] = _focus_mode
             with _sc:
                 if st.button(
                     "🌟",
@@ -437,21 +481,56 @@ if selected_url:
                         st.session_state["_from_nav"] = True
                     st.rerun()
 
+        # Job header
         col1, col2 = st.columns([2, 1], gap="large")
-
         with col1:
             st.markdown(f"### {row['job_title']}")
             st.markdown(f"#### {row['employer']}")
 
             if row.get("job_summary"):
                 st.caption(row["job_summary"])
-            with st.container(border=True):
-                if row.get("listing_text"):
-                    st.markdown(row["listing_text"])
-                else:
-                    st.caption("No listing text available.")
 
         with col2:
+            st.space("stretch")
+            source_col, date_col = st.columns(2)
+            with source_col:
+                st.write(
+                    f"**Source:** {SOURCE_DISPLAY.get(row['source'], row['source'].title())}"
+                )
+            with date_col:
+                st.write(f"**Date:** {row['scraped_at']}")
+            url = row["url"]
+            if url:
+                st.link_button(
+                    "Open original listing",
+                    url,
+                    icon=":material/open_in_new:",
+                    type="secondary",
+                    width="stretch",
+                )
+            st.space("stretch")
+
+        # Listing and analysis
+        col_listing, col_analysis = st.columns([2, 1], gap="large")
+
+        with col_listing:
+            with st.container(border=True):
+                if row.get("listing_text"):
+                    st.markdown(
+                        "<style>"
+                        ".fumble-listing { font-size: 0.9rem; }"
+                        ".fumble-listing h1, .fumble-listing h2, .fumble-listing h3"
+                        "{ font-size: 1rem !important; font-weight: 600; margin: 0.4em 0 0.2em; }"
+                        "</style>"
+                        "<div class='fumble-listing'>\n\n"
+                        + row["listing_text"]
+                        + "\n\n</div>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.caption("No listing text available.")
+        with col_analysis:
+
             st.markdown(
                 "### {} Suggestion: {}".format(
                     SUGGESTION_ICON.get(row["suggestion"], ""),
@@ -492,24 +571,6 @@ if selected_url:
                         st.caption(f"- {icon} {gap['description']}")
 
             st.divider()
-            source_col, date_col = st.columns(2)
-            with source_col:
-                st.write(
-                    f"**Source:** {SOURCE_DISPLAY.get(row['source'], row['source'].title())}"
-                )
-            with date_col:
-                st.write(f"**Date:** {row['scraped_at']}")
-            url = row["url"]
-            if url:
-                st.link_button(
-                    "Open original listing",
-                    url,
-                    icon=":material/open_in_new:",
-                    type="secondary",
-                    width="stretch",
-                )
-
-            st.divider()
             if st.button(
                 "Delete listing from database",
                 key="delete_btn",
@@ -528,6 +589,7 @@ if selected_url:
                     st.session_state.pop("selected_url", None)
                     st.rerun()
 
+
 # Keyboard shortcuts:
 #   j / ← : previous listing      k / → : next listing
 #   1: dislike   2: like   3: superlike
@@ -538,8 +600,8 @@ components.html(
     <script>
     (function () {
         var win = window.parent;
-        if (win._sift_nav_handler) {
-            win.document.removeEventListener('keydown', win._sift_nav_handler);
+        if (win._fumble_nav_handler) {
+            win.document.removeEventListener('keydown', win._fumble_nav_handler);
         }
 
         var _gPending = false;
@@ -584,7 +646,7 @@ components.html(
             return false;
         }
 
-        win._sift_nav_handler = function (e) {
+        win._fumble_nav_handler = function (e) {
             var active = win.document.activeElement;
 
             // Escape always blurs inputs, regardless of other guards
@@ -626,7 +688,7 @@ components.html(
             if (!label) return;
             clickButton(label);
         };
-        win.document.addEventListener('keydown', win._sift_nav_handler);
+        win.document.addEventListener('keydown', win._fumble_nav_handler);
     })();
     </script>
     """,

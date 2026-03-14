@@ -3,9 +3,9 @@ Test scrape → assess → store with a real job URL.
 """
 
 from pathlib import Path
-from sift.assess import assess_fit
-from sift.scrape import scrape_job_page
-from sift.store import init_db, load_assessments, save_assessment, url_exists
+from fumble.assess import assess_fit
+from fumble.scrape import scrape_job_page
+from fumble.store import init_db, load_assessments, save_assessment, url_exists
 
 PROFILE = Path("resources/profile.md").read_text()
 CRITERIA = Path("resources/search-criteria.md").read_text()

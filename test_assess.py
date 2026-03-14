@@ -4,8 +4,8 @@ Runs against a hardcoded job description — no scraping or email needed.
 """
 
 from pathlib import Path
-from sift.assess import assess_fit
-from sift.store import init_db, load_assessments, save_assessment, url_exists
+from fumble.assess import assess_fit
+from fumble.store import init_db, load_assessments, save_assessment, url_exists
 
 PROFILE = Path("resources/profile.md").read_text()
 CRITERIA = Path("resources/search-criteria.md").read_text()

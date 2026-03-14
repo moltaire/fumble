@@ -1,4 +1,4 @@
-# Sift
+# Fumble
 
 Automated job ad screening pipeline. Fetches job URLs from alert emails, scrapes the listings, and uses an LLM to assess fit against your profile and search criteria. Results are stored in a local SQLite database and browsed via a Streamlit dashboard.
 
@@ -8,7 +8,7 @@ Automated job ad screening pipeline. Fetches job URLs from alert emails, scrapes
 2. **Scrape** — opens each URL in a headless Chromium browser (Playwright), follows redirects, and extracts the page text
 3. **Extract** — an LLM cleans the raw page text into a structured job listing (employer, title, language, listing text)
 4. **Assess** — a second LLM call scores the listing on domain fit, role fit, and gap risk against your profile and criteria, and produces a structured assessment with fit areas, gaps, and an overall recommendation
-5. **Store** — results are saved to `data/sift.db` (SQLite)
+5. **Store** — results are saved to `data/fumble.db` (SQLite)
 6. **Review** — browse, filter, rate, and bookmark results in the dashboard
 
 URLs are cached after processing — re-running over the same date range skips already-seen URLs without re-scraping.
@@ -18,8 +18,26 @@ URLs are cached after processing — re-running over the same date range skips a
 ### Requirements
 
 - Python 3.12+
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
 - [Ollama](https://ollama.com) running locally (or an OpenAI / Anthropic API key)
 - A Playwright-compatible Chromium install: `playwright install chromium`
+
+### Install
+
+```bash
+# Install dependencies into a local venv
+uv sync
+
+# Install fumble as a global tool so you can run it from any directory
+uv tool install --editable .
+```
+
+After tool install, two commands are available globally:
+
+| Command | Description |
+|---|---|
+| `fumblebee` | Run the pipeline |
+| `fumble` | Launch the dashboard |
 
 ### Configuration
 
@@ -45,7 +63,7 @@ Copy `resources/profile.example.md` → `resources/profile.md` and `resources/se
 LinkedIn requires a logged-in browser session. Run this once before the first pipeline run:
 
 ```
-python main.py --login-linkedin
+fumblebee --login-linkedin
 ```
 
 Log in inside the browser window, then press Enter in the terminal. The session is saved to `data/browser_profile/` and reused automatically on every subsequent scrape.
@@ -55,7 +73,7 @@ Log in inside the browser window, then press Enter in the terminal. The session 
 ### Run the pipeline
 
 ```
-python main.py [options]
+fumblebee [options]
 ```
 
 | Argument | Default | Description |
@@ -72,7 +90,7 @@ python main.py [options]
 ### Run the dashboard
 
 ```
-streamlit run sift/dashboard.py
+fumblebee
 ```
 
 The dashboard lets you:
@@ -114,7 +132,7 @@ Sift supports Ollama (local), OpenAI, and Anthropic via the `LLM_PROVIDER` and `
 
 ```
 main.py                  # Pipeline entry point
-sift/
+fumble/
   email_fetch.py         # IMAP connection and URL extraction
   scrape.py              # Playwright scraping + persistent browser session
   extract.py             # LLM-based listing extraction
@@ -129,7 +147,7 @@ resources/
   search-criteria.example.md  # Template for search-criteria.md
   sources.toml           # Email folder and URL pattern configuration
 data/
-  sift.db                # SQLite database (gitignored)
+  fumble.db              # SQLite database (gitignored)
   browser_profile/       # Persistent Playwright session (gitignored)
   failures.log           # Scrape/extraction failure log
 ```

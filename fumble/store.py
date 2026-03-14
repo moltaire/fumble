@@ -3,9 +3,9 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from sift.assess import Assessment
+from fumble.assess import Assessment
 
-DB_PATH = Path("data/sift.db")
+DB_PATH = Path("data/fumble.db")
 
 
 def _connect() -> sqlite3.Connection:

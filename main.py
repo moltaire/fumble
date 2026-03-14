@@ -3,12 +3,12 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
 
-from sift.assess import assess_fit
-from sift.email_fetch import fetch_job_urls
-from sift.extract import extract_listing
-from sift.scrape import login_flow, scrape_job_page
-from sift.extract import JobListing
-from sift.store import clear_ratings, init_db, load_assessments, mark_url_seen, save_assessment, update_assessment, tracking_url_seen, url_exists
+from fumble.assess import assess_fit
+from fumble.email_fetch import fetch_job_urls
+from fumble.extract import extract_listing
+from fumble.scrape import login_flow, scrape_job_page
+from fumble.extract import JobListing
+from fumble.store import clear_ratings, init_db, load_assessments, mark_url_seen, save_assessment, update_assessment, tracking_url_seen, url_exists
 
 PROFILE = Path("resources/profile.md").read_text()
 CRITERIA = Path("resources/search-criteria.md").read_text()

@@ -3,7 +3,7 @@ Test email URL extraction.
 Prints URLs found in unseen job alert emails — no scraping or assessment.
 """
 
-from sift.email_fetch import fetch_job_urls
+from fumble.email_fetch import fetch_job_urls
 
 if __name__ == "__main__":
     print("Fetching job URLs from email...\n")
