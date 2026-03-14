@@ -90,7 +90,7 @@ def save_assessment(a: Assessment) -> None:
                  language, listing_text, job_summary, domain_fit, domain_fit_reason,
                  role_fit, role_fit_reason, gap_risk, gap_risk_reason, fit_areas, gaps,
                  reasoning, suggestion)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
             (
                 a.url,
