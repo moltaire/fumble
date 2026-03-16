@@ -8,7 +8,7 @@ from fumble.llm import MODEL, PROVIDER, call_llm
 
 SYSTEM_PROMPT = """You are a precise job screening assistant.
 Assess how well a job listing matches a candidate's profile and search criteria.
-Be concise and direct."""
+Be concise and direct. Reach one firm conclusion per dimension — do not hedge, restart, or revisit decisions."""
 
 USER_PROMPT = """## Candidate Profile
 {profile_text}

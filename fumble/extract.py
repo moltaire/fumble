@@ -7,7 +7,8 @@ from fumble.llm import EXTRACT_MODEL, PROVIDER, TRIAGE_MODEL, call_llm
 SYSTEM_PROMPT = """You are a precise text extraction assistant.
 Your first job is to determine whether the input actually contains a job listing.
 If it does, extract and clean the listing content.
-If it does not — e.g. it is a login wall, cookie notice, error page, job search results page, or otherwise lacks a specific job advertisement — set is_job_listing to false and leave all other fields empty."""
+If it does not — e.g. it is a login wall, cookie notice, error page, job search results page, or otherwise lacks a specific job advertisement — set is_job_listing to false and leave all other fields empty.
+Use at most 3 reasoning steps. Keep thinking under 100 words. Think once, answer directly."""
 
 USER_PROMPT = """## Raw scraped content
 {raw_text}
