@@ -352,7 +352,7 @@ if search:
     mask &= (
         raw_df["employer"].str.lower().str.contains(sl, na=False)
         | raw_df["job_title"].str.lower().str.contains(sl, na=False)
-        | raw_df["reasoning"].str.lower().str.contains(sl, na=False)
+        | raw_df["url"].str.lower().str.contains(sl, na=False)
         | raw_df["listing_text"].str.lower().str.contains(sl, na=False)
     )
 
@@ -389,6 +389,14 @@ if _current_view == "⭐ Saved":
     ).index
     filtered = filtered.iloc[_order].reset_index(drop=True)
     filtered_raw = filtered_raw.iloc[_order].reset_index(drop=True)
+
+# When search changes, jump to first result (or clear if nothing matches)
+_prev_search = st.session_state.get("_prev_search", "")
+if search != _prev_search:
+    st.session_state["_prev_search"] = search
+    st.session_state["selected_url"] = (
+        filtered_raw.iloc[0]["url"] if not filtered_raw.empty else None
+    )
 
 # --- Table (hidden in focus mode) ---
 TABLE_COLS = [
@@ -510,7 +518,7 @@ if selected_url:
                     "‹",
                     disabled=_pos == 0,
                     use_container_width=True,
-                    help="Previous (Keyboard: Left Arrow or J)",
+                    help="Previous (Keyboard: Left Arrow or K)",
                 ):
                     st.session_state["selected_url"] = filtered_raw.iloc[_pos - 1][
                         "url"
@@ -527,7 +535,7 @@ if selected_url:
                     "›",
                     disabled=_pos >= _total - 1,
                     use_container_width=True,
-                    help="Next (Keyboard: Right Arrow or K)",
+                    help="Next (Keyboard: Right Arrow or J)",
                 ):
                     st.session_state["selected_url"] = filtered_raw.iloc[_pos + 1][
                         "url"
@@ -699,7 +707,7 @@ if selected_url:
 
 
 # Keyboard shortcuts:
-#   j / ← : previous listing      k / → : next listing
+#   k / ← : previous listing      j / → : next listing
 #   1: dislike   2: like   3: superlike
 #   g i: Inbox   g s: Saved   g h: Hidden   g a: All
 # Handler is replaced on every rerun so shortcut changes take effect without a full reload.
@@ -754,6 +762,22 @@ components.html(
             return false;
         }
 
+        // Attach Enter→blur on the search input (flag prevents duplicate listeners)
+        (function attachSearchEnter() {
+            var inputs = win.document.querySelectorAll('input[type="text"]');
+            for (var i = 0; i < inputs.length; i++) {
+                if ((inputs[i].placeholder || '').indexOf('Employer') !== -1) {
+                    if (!inputs[i]._fumble_enter) {
+                        inputs[i]._fumble_enter = true;
+                        inputs[i].addEventListener('keydown', function(e) {
+                            if (e.key === 'Enter') { this.blur(); }
+                        });
+                    }
+                    break;
+                }
+            }
+        })();
+
         win._fumble_nav_handler = function (e) {
             var active = win.document.activeElement;
 
@@ -788,8 +812,8 @@ components.html(
             if (e.key === 'f') { clickFocusToggle(); return; }
             if (e.key === '/') { if (focusSearch()) { e.preventDefault(); } return; }
             var label = null;
-            if (e.key === 'ArrowLeft'  || e.key === 'j') label = '\u2039';
-            if (e.key === 'ArrowRight' || e.key === 'k') label = '\u203a';
+            if (e.key === 'ArrowLeft'  || e.key === 'k') label = '\u2039';
+            if (e.key === 'ArrowRight' || e.key === 'j') label = '\u203a';
             if (e.key === '3') label = '🌟';
             if (e.key === '2') label = '👍';
             if (e.key === '1') label = '👎';
