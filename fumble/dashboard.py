@@ -1,7 +1,7 @@
-from dateutil import tz
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+from dateutil import tz
 
 from fumble.store import (
     DB_PATH,
@@ -65,6 +65,9 @@ FIT_LABELS = {f"{FIT_ICON[v]} {v}": v for v in ["high", "medium", "low"]}
 GAP_LABELS = {
     f"{GAP_ICON[v]} {v}": v for v in ["low", "medium", "high"]
 }  # low risk first
+_SUGG_VAL_TO_LABEL = {v: k for k, v in SUGGESTION_LABELS.items()}
+_FIT_VAL_TO_LABEL = {v: k for k, v in FIT_LABELS.items()}
+_GAP_VAL_TO_LABEL = {v: k for k, v in GAP_LABELS.items()}
 
 # Named views: label → rating values to include
 VIEWS = {
@@ -74,6 +77,8 @@ VIEWS = {
     "✨ All": ["new", "superliked", "liked", "disliked"],
 }
 _DEFAULT_VIEW = "📬 Inbox"
+_VIEW_SLUG = {"📬 Inbox": "inbox", "⭐ Saved": "saved", "👎 Hidden": "hidden", "✨ All": "all"}
+_SLUG_VIEW = {v: k for k, v in _VIEW_SLUG.items()}
 
 # Refinement defaults = all options selected (no filtering)
 _REFINE_DEFAULTS: dict = {
@@ -90,15 +95,19 @@ _REFINE_DEFAULTS: dict = {
 }
 
 raw_df = pd.DataFrame([a.model_dump() for a in assessments])
-raw_df["scraped_at"] = pd.to_datetime(raw_df["scraped_at"], utc=True).dt.tz_convert(tz.tzlocal()).dt.strftime(
-    "%Y-%m-%d %H:%M"
+raw_df["scraped_at"] = (
+    pd.to_datetime(raw_df["scraped_at"], utc=True)
+    .dt.tz_convert(tz.tzlocal())
+    .dt.strftime("%Y-%m-%d %H:%M")
 )
-raw_df["assessed_at"] = pd.to_datetime(raw_df["assessed_at"], utc=True).dt.tz_convert(tz.tzlocal()).dt.strftime(
-    "%Y-%m-%d %H:%M"
+raw_df["assessed_at"] = (
+    pd.to_datetime(raw_df["assessed_at"], utc=True)
+    .dt.tz_convert(tz.tzlocal())
+    .dt.strftime("%Y-%m-%d %H:%M")
 )
 
 df = raw_df.copy()
-df["suggestion"] = df["suggestion"].map(lambda v: f"{SUGGESTION_ICON[v]} {v.title()}")
+df["suggestion"] = df["suggestion"].map(SUGGESTION_ICON)
 _DOT = {"high": "🟢", "medium": "🟡", "low": "🔴"}
 _DOT_INV = {"low": "🟢", "medium": "🟡", "high": "🔴"}
 df["domain_fit"] = raw_df["domain_fit"].map(_DOT)
@@ -109,6 +118,30 @@ df["rating"] = raw_df["rating"].map(lambda v: RATING_ICON.get(v, "🆕"))
 
 # Detect view change or explicit reset → clear refinement filters before widgets render
 # Use a separate non-widget key so the view survives focus mode (widgets clear state when hidden)
+# Seed from URL query param on first load (before any widget renders)
+if "_view_persisted" not in st.session_state:
+    _slug = st.query_params.get("view")
+    st.session_state["_view_persisted"] = _SLUG_VIEW.get(_slug, _DEFAULT_VIEW)
+
+    def _param_to_labels(param: str, val_to_label: dict, all_labels: list) -> list:
+        raw = st.query_params.get(param)
+        if not raw:
+            return list(all_labels)
+        labels = [val_to_label[v] for v in raw.split(",") if v in val_to_label]
+        return labels if labels else list(all_labels)
+
+    st.session_state["refine_suggestion"] = _param_to_labels(
+        "suggestion", _SUGG_VAL_TO_LABEL, list(SUGGESTION_LABELS)
+    )
+    st.session_state["refine_domain_fit"] = _param_to_labels(
+        "domain", _FIT_VAL_TO_LABEL, list(FIT_LABELS)
+    )
+    st.session_state["refine_role_fit"] = _param_to_labels(
+        "role", _FIT_VAL_TO_LABEL, list(FIT_LABELS)
+    )
+    st.session_state["refine_gap_risk"] = _param_to_labels(
+        "gap", _GAP_VAL_TO_LABEL, list(GAP_LABELS)
+    )
 _current_view = st.session_state.get("_view_persisted", _DEFAULT_VIEW)
 _prev_view = st.session_state.get("_prev_view")
 if st.session_state.pop("_reset_refinements", False) or (
@@ -156,6 +189,7 @@ if not _focus_mode:
         )
         st.session_state["_view_persisted"] = view
         _current_view = view
+        st.query_params["view"] = _VIEW_SLUG[view]
     with _rcol:
         with st.popover(
             ":material/filter_alt:" if _refine_active else ":material/filter_alt_off:",
@@ -269,6 +303,24 @@ suggestions = [SUGGESTION_LABELS[l] for l in _suggestion_keys]
 domain_fits = [FIT_LABELS[l] for l in _domain_keys]
 role_fits = [FIT_LABELS[l] for l in _role_keys]
 gap_risks = [GAP_LABELS[l] for l in _gap_keys]
+
+# Sync active filter state to URL (omit param when all values selected = no filtering)
+def _to_param(selected: list, label_to_val: dict, all_labels: list) -> str | None:
+    return None if set(selected) == set(all_labels) else ",".join(
+        label_to_val[l] for l in selected if l in label_to_val
+    )
+
+for _qk, _sel, _l2v, _all in [
+    ("suggestion", _suggestion_keys, SUGGESTION_LABELS, list(SUGGESTION_LABELS)),
+    ("domain",     _domain_keys,     FIT_LABELS,        list(FIT_LABELS)),
+    ("role",       _role_keys,       FIT_LABELS,        list(FIT_LABELS)),
+    ("gap",        _gap_keys,        GAP_LABELS,        list(GAP_LABELS)),
+]:
+    _val = _to_param(_sel, _l2v, _all)
+    if _val is None:
+        st.query_params.pop(_qk, None)
+    else:
+        st.query_params[_qk] = _val
 selected_employers = st.session_state.get("filter_employers") or []
 selected_titles = st.session_state.get("filter_titles") or []
 scraped_after = st.session_state.get("filter_scraped_after")
@@ -347,7 +399,6 @@ TABLE_COLS = [
     "domain_fit",
     "role_fit",
     "gap_risk",
-    "scraped_at",
     "assessed_at",
     "url",
 ]
@@ -382,37 +433,36 @@ if not _focus_mode:
         selection = st.dataframe(
             filtered[TABLE_COLS],
             column_config={
-                "rating": st.column_config.TextColumn("", width=15),
+                "rating": st.column_config.TextColumn("💘", width=10),
                 "suggestion": st.column_config.TextColumn(
-                    "Suggestion",
-                    help="LLM recommendation: apply, consider, or skip. Advisory only.",
+                    "S",
+                    width=10,
+                    help="Suggestion: 🟢 apply · 🟡 consider · 🔴 skip",
                 ),
-                "employer": st.column_config.TextColumn("Employer"),
-                "job_title": st.column_config.TextColumn("Job Title"),
+                "employer": st.column_config.TextColumn("Employer", width=200),
+                "job_title": st.column_config.TextColumn("Job Title", width=400),
                 "domain_fit": st.column_config.TextColumn(
                     "D",
                     help="Domain fit: 🟢 high · 🟡 medium · 🔴 low",
-                    width=15,
+                    width=10,
                 ),
                 "role_fit": st.column_config.TextColumn(
                     "R",
                     help="Role fit: 🟢 high · 🟡 medium · 🔴 low",
-                    width=15,
+                    width=10,
                 ),
                 "gap_risk": st.column_config.TextColumn(
                     "G",
                     help="Gap: 🟢 low · 🟡 medium · 🔴 high",
-                    width=15,
-                ),
-                "scraped_at": st.column_config.TextColumn(
-                    "Scraped", help="When the listing was fetched"
+                    width=10,
                 ),
                 "assessed_at": st.column_config.TextColumn(
-                    "Assessed", help="When the LLM assessment was run"
+                    "Assessed", help="When the LLM assessment was run", width=90
                 ),
                 "url": st.column_config.LinkColumn(
                     "Link",
                     display_text="https?://(?:[a-zA-Z0-9-]+\\.)*([a-zA-Z0-9-]+\\.[a-zA-Z]{2,})",
+                    width=90,
                 ),
             },
             width="stretch",
