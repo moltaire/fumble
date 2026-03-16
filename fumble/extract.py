@@ -22,7 +22,14 @@ Set is_job_listing accordingly, then extract:
 - employer: company name (empty string if unclear)
 - job_title: exact job title as written (empty string if unclear)
 - language: DE or EN based on the job listing language
-- listing_text: the cleaned job listing in markdown. Include job description, responsibilities, requirements, and any about-the-company section. Exclude navigation, cookie notices, footer, sidebar, links to other jobs, and other boilerplate. Preserve structure and original wording. Empty string if is_job_listing is false.
+- listing_text: the complete job listing in markdown. Reproduce every section that belongs to the job advertisement — do not summarise, shorten, or omit any part. Use ## for main sections and ### for subsections. Include all of the following if present:
+  - Company introduction / about the organisation
+  - Role overview / what you will do
+  - Responsibilities and tasks
+  - Requirements and qualifications
+  - What the employer offers / benefits
+  - Application process and contact details
+  Exclude only navigation menus, cookie notices, footer content, links to other jobs, and unrelated site boilerplate. Empty string if is_job_listing is false.
 """
 
 
@@ -62,7 +69,7 @@ def is_listing_quick(text: str) -> bool:
         return True  # safe default: never filter on error
 
 
-EXTRACT_OPTIONS = {"num_predict": 4000, "top_k": 20, "presence_penalty": 1.5}
+EXTRACT_OPTIONS = {"num_predict": 8000, "top_k": 20, "presence_penalty": 1.5}
 
 
 def extract_listing(raw_text: str) -> JobListing:
