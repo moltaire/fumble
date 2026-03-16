@@ -10,6 +10,7 @@ load_dotenv()
 PROVIDER = os.getenv("LLM_PROVIDER", "ollama")
 MODEL = os.getenv("LLM_MODEL", "llama3.1:8b")
 EXTRACT_MODEL = os.getenv("LLM_EXTRACT_MODEL", MODEL)
+TRIAGE_MODEL = os.getenv("LLM_TRIAGE_MODEL", "llama3.2")
 DEBUG = os.getenv("DEBUG_LLM", "").strip() == "1"
 
 

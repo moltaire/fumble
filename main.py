@@ -5,7 +5,7 @@ from urllib.parse import urlparse, urlunparse
 
 from fumble.assess import assess_fit
 from fumble.email_fetch import fetch_job_urls
-from fumble.extract import extract_listing
+from fumble.extract import extract_listing, is_listing_quick
 from fumble.scrape import login_flow, scrape_job_page
 from fumble.extract import JobListing
 from fumble.store import clear_ratings, init_db, load_assessments, mark_url_seen, save_assessment, update_assessment, tracking_url_seen, url_exists
@@ -152,6 +152,14 @@ def main():
         if len(job_text.strip()) < MIN_LISTING_LENGTH:
             print(f"  Page content too short — skipping")
             _log_failure(canonical_url, source, "page_too_short")
+            mark_url_seen(tracking_url)
+            mark_url_seen(canonical_url)
+            skip_count += 1
+            continue
+
+        if not is_listing_quick(job_text):
+            print(f"  Not a job listing (triage) — skipping")
+            _log_failure(canonical_url, source, "not_a_job_listing_triage")
             mark_url_seen(tracking_url)
             mark_url_seen(canonical_url)
             skip_count += 1

@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from fumble.llm import EXTRACT_MODEL, call_llm
+from fumble.llm import EXTRACT_MODEL, PROVIDER, TRIAGE_MODEL, call_llm
 
 SYSTEM_PROMPT = """You are a precise text extraction assistant.
 Your first job is to determine whether the input actually contains a job listing.
@@ -31,6 +31,34 @@ class JobListing(BaseModel):
     job_title: str = ""
     language: Literal["DE", "EN"] = "EN"
     listing_text: str = ""
+
+
+_TRIAGE_SYSTEM = "You are a filter that checks if scraped web content contains a job listing."
+_TRIAGE_PROMPT = """Does this page contain a job listing?
+
+Output true if yes or if you are unsure. Only output false when you are confident this is NOT a job listing — e.g. a login wall, cookie consent page, error page, or a page listing multiple search results rather than a single job advertisement.
+
+## Content
+{text}"""
+
+_TRIAGE_CHAR_LIMIT = 3_000
+
+
+class _TriageResult(BaseModel):
+    is_job_listing: bool = True  # default True: when in doubt, pass through
+
+
+def is_listing_quick(text: str) -> bool:
+    """Fast binary check using a small model. Returns False only when confident it's not a listing.
+    Always returns True for non-Ollama providers (API models are already fast)."""
+    if PROVIDER != "ollama":
+        return True
+    prompt = _TRIAGE_PROMPT.format(text=text[:_TRIAGE_CHAR_LIMIT])
+    try:
+        content = call_llm(_TRIAGE_SYSTEM, prompt, _TriageResult.model_json_schema(), model=TRIAGE_MODEL, think=False)
+        return _TriageResult.model_validate_json(content).is_job_listing
+    except Exception:
+        return True  # safe default: never filter on error
 
 
 def extract_listing(raw_text: str) -> JobListing:

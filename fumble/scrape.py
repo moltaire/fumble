@@ -48,13 +48,18 @@ def _extract_next_data(html: str) -> str | None:
     return "\n\n".join(cleaned)
 
 
+_MAX_TEXT_LENGTH = 15_000  # chars — job listings are never longer than this
+
+
 def _strip_html(html: str) -> str:
     import re
-    html = re.sub(r"<(script|style)[^>]*>.*?</(script|style)>", " ", html, flags=re.DOTALL | re.IGNORECASE)
+    # Remove scripts, styles, and structural/navigational elements with their content
+    html = re.sub(r"<(script|style|nav|header|footer|aside)[^>]*>.*?</(script|style|nav|header|footer|aside)>", " ", html, flags=re.DOTALL | re.IGNORECASE)
     html = re.sub(r"<[^>]+>", " ", html)
     html = re.sub(r"[ \t]+", " ", html)
     html = re.sub(r"\n{3,}", "\n\n", html)
-    return html.strip()
+    text = html.strip()
+    return text[:_MAX_TEXT_LENGTH]
 
 
 def _scrape_curl(url: str) -> tuple[str, str]:
