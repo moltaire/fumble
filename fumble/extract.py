@@ -87,23 +87,14 @@ _SPAM_PROMPT = """## Candidate Search Criteria
 
 ---
 
-Is this listing clearly irrelevant for this candidate?
+Is this listing clearly irrelevant for this candidate based on their search criteria?
 
 Focus on what the ROLE ITSELF requires day-to-day, not the organisation's domain.
-A café waiter job at a social enterprise is still a café waiter job.
 
-Flag as spam (is_spam=true) when the role's actual tasks are clearly outside the candidate's target role types:
-- Internship / student / trainee position (Praktikum, Werkstudent, Auszubildender, Volontariat)
-- Role tasks are clearly a different profession with no overlap with the target roles: manual/physical work, trades, repair, cooking, serving, cleaning, driving, nursing, cashier, warehouse, security, purely legal or purely clinical roles
+Flag as spam (is_spam=true) only when the role clearly falls outside all of the candidate's target role types as defined in the Search Criteria above.
+When in doubt, do not flag as spam.
 
-The organisation's domain is irrelevant — the role itself must fall within the target role types.
-
-Do NOT flag as spam:
-- Roles adjacent to the candidate's target domains
-- Roles where fit is weak but plausible
-- Anything where you are uncertain
-
-reason: short phrase explaining why, e.g. "internship", "café service job", "warehouse work". Empty string if not spam."""
+reason: short phrase explaining why. Empty string if not spam."""
 
 _SPAM_CHAR_LIMIT = 2_000
 
