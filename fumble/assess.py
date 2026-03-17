@@ -39,11 +39,16 @@ Assess this job listing against the profile and criteria above.
 - description: one short phrase naming the gap.
 - severity: minor (easily addressed or not critical) / manageable (real gap but not disqualifying) / severe (likely dealbreaker).
 
+**Before choosing a suggestion, answer this question first:**
+Does this role require analytical, data, or research work as its primary day-to-day function?
+- If NO → suggestion must be spam. The company's domain is irrelevant. A mechanic at a sustainability company is still a mechanic.
+- If YES → continue to apply / consider / skip below.
+
 **suggestion**: apply / consider / skip / spam
-- apply: strong match on role type and domain — worth applying
-- consider: partial match — worth reviewing in detail
-- skip: within scope but weak fit — not worth pursuing
-- spam: the role's day-to-day tasks are clearly the wrong profession — regardless of the company's domain. A mechanic role at a tech company is still a mechanic role. Examples: repair/maintenance technician, waiter, nurse, warehouse operative, lawyer, driver. Use this whenever the actual job tasks have no analytical or research component.
+- spam: primary tasks are not analytical/data/research — wrong profession entirely (mechanic, nurse, waiter, driver, lawyer, warehouse, repair technician, etc.)
+- apply: strong role and domain match — worth applying
+- consider: role type is correct, partial fit — worth reviewing
+- skip: role type is broadly correct (data/research/analytical) but fit is too weak to pursue
 
 **reasoning**: 2 sentences maximum. Lead with the decisive factor, then the trade-off or caveat if any. Plain text, no bullet points.
 """
