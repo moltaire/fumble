@@ -14,7 +14,6 @@ from fumble.store import (
 
 st.set_option("client.toolbarMode", "viewer")
 st.set_page_config(page_title="Fumble", layout="wide", page_icon="💘")
-st.title("💘 Fumble")
 
 # Inject PWA meta tags for iPhone home screen support (runs once via parent document access)
 if "pwa_injected" not in st.session_state:
@@ -43,6 +42,8 @@ var d = window.parent.document;
 _focus_mode = st.session_state.get(
     "focus_mode", st.session_state.get("_focus_persisted", False)
 )
+if not _focus_mode:
+    st.title("💘 Fumble")
 
 init_db()
 
@@ -521,7 +522,7 @@ if not _focus_mode:
         _ROW_H = 35
         _HEADER_H = 38
         table_height = min(
-            len(filtered) * _ROW_H + _HEADER_H, 280 if selected_url else 560
+            len(filtered) * _ROW_H + _HEADER_H, 280 if selected_url else 720
         )
 
         selection = st.dataframe(
@@ -753,21 +754,24 @@ if selected_url:
         col_listing, col_analysis = st.columns([2, 1], gap="large")
 
         with col_listing:
-            with st.container(border=True):
-                if row.get("listing_text"):
-                    st.markdown(
-                        "<style>"
-                        ".fumble-listing { font-size: 0.9rem; }"
-                        ".fumble-listing h1, .fumble-listing h2, .fumble-listing h3"
-                        "{ font-size: 1rem !important; font-weight: 600; margin: 0.4em 0 0.2em; }"
-                        "</style>"
-                        "<div class='fumble-listing'>\n\n"
-                        + row["listing_text"]
-                        + "\n\n</div>",
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.caption("No listing text available.")
+            if row.get("listing_text"):
+                st.markdown(
+                    "<style>"
+                    ".fumble-listing-wrap {"
+                    "  max-height: 65vh; overflow-y: auto;"
+                    "  border: 1px solid rgba(49,51,63,0.2); border-radius: 0.5rem; padding: 1rem;"
+                    "}"
+                    ".fumble-listing { font-size: 0.9rem; }"
+                    ".fumble-listing h1, .fumble-listing h2, .fumble-listing h3"
+                    "{ font-size: 1rem !important; font-weight: 600; margin: 0.4em 0 0.2em; }"
+                    "</style>"
+                    "<div class='fumble-listing-wrap'><div class='fumble-listing'>\n\n"
+                    + row["listing_text"]
+                    + "\n\n</div></div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.caption("No listing text available.")
         with col_analysis:
             if view == "🚫 Spam":
                 st.markdown("### 🚫 Spam filtered")
