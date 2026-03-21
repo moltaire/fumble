@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SOURCES_PATH = Path("resources/sources.toml")
+SOURCES_PATH = Path(__file__).parent.parent / "resources/sources.toml"
 
 
 def _load_sources() -> list[dict]:
