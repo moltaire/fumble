@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
@@ -76,7 +78,7 @@ if not assessments and not spam_assessments:
     st.info("No listings yet. Run fumblebee first.")
     st.stop()
 
-with open("resources/sources.toml", "rb") as _f:
+with open(Path(__file__).parent.parent / "resources/sources.toml", "rb") as _f:
     import tomllib as _tomllib
 
     _sources = _tomllib.load(_f)["sources"]
@@ -733,21 +735,43 @@ if selected_url:
 
         with col2:
             st.space("stretch")
-            source_col, date_col = st.columns(2)
-            with source_col:
-                _source_label = SOURCE_DISPLAY.get(row["source"], row["source"].title())
-                _url = row["url"]
+            _url = row["url"]
+            _source_raw = row.get("source") or ""
+            _entry = "manual" if _source_raw == "manual" else "IMAP"
+            _scrape_method = row.get("scrape_method") or "N/A"
+            _assess_model = row.get("assessed_model") or "N/A"
+
+            # Row 1: Listing info (Link, Source)
+            _linkcol, _sourcecol = st.columns(2)
+            with _linkcol:
                 if _url:
-                    st.caption(
-                        f"**Source:** {_source_label} [:material/open_in_new:]({_url})",
-                        unsafe_allow_html=False,
+                    import re as _re
+
+                    _m = _re.search(
+                        r"https?://(?:[a-zA-Z0-9-]+\.)*([a-zA-Z0-9-]+\.[a-zA-Z]{2,})",
+                        _url,
                     )
+                    _stub = _m.group(1) if _m else _url[:50]
+                    st.caption(f"**Link:** {_stub} [:material/open_in_new:]({_url})")
                 else:
-                    st.caption(f"**Source:** {_source_label}")
-                st.caption(f"**Model:** {row.get('assessed_model') or 'N/A'}")
-            with date_col:
+                    st.caption("**Link:** N/A")
+            with _sourcecol:
+                st.caption(f"**Source:** {_entry}")
+
+            # Row 2: Scrape info (Method, date)
+            _scrape_method_col, _scrape_date_col = st.columns(2)
+            with _scrape_method_col:
+                st.caption(f"**Scraper:** {_scrape_method}")
+            with _scrape_date_col:
                 st.caption(f"**Scraped:** {row['scraped_at']}")
+
+            # Row 3: Assess info
+            _assess_method_col, _assess_date_col = st.columns(2)
+            with _assess_method_col:
+                st.caption(f"**Assessor:** {_assess_model}")
+            with _assess_date_col:
                 st.caption(f"**Assessed:** {row['assessed_at']}")
+
             st.space("stretch")
 
         # Listing and analysis
