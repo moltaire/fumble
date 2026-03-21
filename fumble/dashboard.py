@@ -775,8 +775,29 @@ if selected_url:
         with col_analysis:
             if view == "🚫 Spam":
                 st.markdown("### 🚫 Spam filtered")
-                st.caption(row.get("job_summary") or "No reason recorded.")
-                st.caption("Restore to inbox to run full assessment.")
+                _is_early_spam = not row.get("role_fit_reason")
+                _spam_summary = row.get("job_summary") or ""
+                if _is_early_spam:
+                    st.caption(f"Marked as spam due to: {_spam_summary}" if _spam_summary else "No reason recorded.")
+                    st.caption("Restore to inbox to run full assessment.")
+                else:
+                    st.caption(_spam_summary or "No reason recorded.")
+                if row.get("role_fit_reason"):
+                    with st.expander("Show evaluation details", expanded=False):
+                        st.markdown(
+                            f"**{FIT_ICON.get(row['domain_fit'], '')} Domain fit: {row['domain_fit'].title()}**"
+                        )
+                        if row.get("domain_fit_reason"):
+                            st.caption(row["domain_fit_reason"])
+                        st.markdown(
+                            f"**{FIT_ICON.get(row['role_fit'], '')} Role fit: {row['role_fit'].title()}**"
+                        )
+                        st.caption(row["role_fit_reason"])
+                        st.markdown(
+                            f"**{GAP_ICON.get(row['gap_risk'], '')} Gap risk: {row['gap_risk'].title()}**"
+                        )
+                        if row.get("gap_risk_reason"):
+                            st.caption(row["gap_risk_reason"])
             else:
                 _applied_label = (
                     "📮 Mark as applied"
