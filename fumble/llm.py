@@ -30,6 +30,8 @@ def call_llm(system: str, prompt: str, schema: dict, temperature: float | None =
         return _call_openai(system, prompt, schema, temperature, model or EXTRACT_MODEL)
     elif p == "anthropic":
         return _call_anthropic(system, prompt, schema, temperature, model or ASSESS_MODEL, cached_prefix=cached_prefix)
+    elif p == "gemini":
+        return _call_gemini(system, prompt, schema, temperature, model or EXTRACT_MODEL)
     else:
         raise ValueError(f"Unknown LLM_PROVIDER: {p!r}")
 
@@ -107,6 +109,33 @@ def _call_anthropic(system: str, prompt: str, schema: dict, temperature: float |
     if not content:
         raise ValueError("LLM returned empty response")
     return _extract_json(content)
+
+
+def _call_gemini(system: str, prompt: str, schema: dict, temperature: float | None, model: str) -> str:
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+    t0 = time.monotonic()
+    response = client.models.generate_content(
+        model=model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+            response_mime_type="application/json",
+            response_schema=schema,
+            temperature=temperature,
+        ),
+    )
+    elapsed = time.monotonic() - t0
+    content = response.text
+    if DEBUG:
+        print(f"  [llm] {elapsed:.1f}s | output={len(content or '')}chars")
+        debug_chars = int(os.getenv("DEBUG_LLM_CHARS", "300"))
+        print(f"  [llm] raw: {(content or '')[:debug_chars]!r}")
+    if not content:
+        raise ValueError("Gemini returned empty response")
+    return content
 
 
 def _extract_json(text: str) -> str:
