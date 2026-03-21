@@ -2,18 +2,18 @@
 
 <img src="docs/screenshot.png" width="70%">
 
-A job screening tool that makes job ad discovery just as fun (shrug) as Tinder. Fumble scrapes listings from your job alert emails, has an LLM assess each one against your profile and criteria, then lets you swipe through the results: liking, skipping, or superliking, until your inbox is clear.
+A job screening tool that makes job ad discovery just as fun (shrug) as Tinder. Fumble scrapes listings from your job alert emails, has an LLM assess each one against your profile and criteria, then lets you rate results quickly: liking, skipping, or superliking, until your inbox is clear.
 
 ## How it works
 
 1. **Fetch** — connects to your IMAP mailbox and extracts job URLs from configured email folders (StepStone, LinkedIn, etc.)
-2. **Scrape** — fetches each URL using curl_cffi (impersonating a real browser) where possible, falling back to a headless Chromium browser (Playwright) for sites that require JavaScript or a logged-in session. Structured data is preferred: JSON-LD `JobPosting` schema is extracted first, then Next.js `__NEXT_DATA__`, then plain text stripping as a fallback.
+2. **Scrape** — fetches each URL using curl_cffi where possible, falling back to a headless Chromium browser (Playwright) for sites that require JavaScript or a logged-in session. Structured data is preferred: JSON-LD `JobPosting` schema is extracted first, then Next.js `__NEXT_DATA__`, then plain text stripping as a fallback.
 3. **Extract** — an LLM structures the raw page text into a job listing (employer, title, language, listing text formatted as markdown)
 4. **Assess** — a second LLM call scores the listing on domain fit, role fit, and gap risk against your profile and criteria, and produces a structured assessment with fit areas, gaps, and an overall recommendation
 5. **Store** — results are saved to `data/fumble.db` (SQLite)
 6. **Review** — browse, filter, rate, and bookmark results in the dashboard
 
-URLs are cached after processing — re-running over the same date range skips already-seen URLs without re-scraping.
+URLs are cached after processing. Re-running over the same date range skips already-seen URLs without re-scraping.
 
 ## Setup
 
@@ -43,6 +43,12 @@ After tool install, two commands are available globally:
 
 ### Configuration
 
+#### Add your background and search profile
+
+Copy `resources/profile.example.md` → `resources/profile.md` and `resources/search-criteria.example.md` → `resources/search-criteria.md`, then fill them in with your background and job search criteria. These files are gitignored so your personal details stay local.
+
+#### IMAP setup
+
 Copy `.env.example` to `.env` and fill in:
 
 ```
@@ -53,6 +59,8 @@ IMAP_PASSWORD=yourpassword
 
 # LLM — see "LLM configuration" below for all options
 ```
+
+#### Source setup
 
 Edit `resources/sources.toml` to configure which email folders to scan and what URL patterns to extract. Each source maps an IMAP folder to a regex pattern matched against URLs found in emails. Currently configured sources:
 
@@ -65,7 +73,6 @@ Edit `resources/sources.toml` to configure which email folders to scan and what 
 
 Each source can optionally set `scraper = "browser"` to force Playwright (needed for login-required sites). The default is `"auto"` — curl first, browser fallback.
 
-Copy `resources/profile.example.md` → `resources/profile.md` and `resources/search-criteria.example.md` → `resources/search-criteria.md`, then fill them in with your background and job search criteria. These files are gitignored so your personal details stay local.
 
 ### Login-required sources
 
@@ -130,7 +137,7 @@ The dashboard lets you:
 
 ## LLM configuration
 
-Fumble supports Ollama (local), Gemini, Anthropic, and OpenAI. The pipeline has three LLM roles with independent provider and model settings:
+Fumble supports Ollama (local), Gemini, Anthropic, and OpenAI (untested so far). The pipeline has three LLM roles with independent provider and model settings:
 
 | Role | What it does | Default provider | Default model |
 |---|---|---|---|
@@ -161,11 +168,11 @@ LLM_ASSESS_MODEL=claude-haiku-4-5-20251001
 | Provider | Key variable | Notes |
 |---|---|---|
 | `ollama` | — | Runs locally, no API cost. Requires capable hardware for quality results (tested on M4 Pro 24GB). |
-| `gemini` | `GOOGLE_API_KEY` | Gemini 2.5 Flash Lite is free tier (1,000 req/day), fast, and produces good extraction results. Recommended for the Extract role. |
-| `anthropic` | `ANTHROPIC_API_KEY` | Claude Haiku is cheap (~$0.01–0.02 per listing), very fast, and produces high-quality assessments. Supports prompt caching — stable context (profile, criteria) is cached across a batch run, reducing input token cost by ~80% after the first call. Recommended for the Assess role. |
-| `openai` | `OPENAI_API_KEY` | |
+| `gemini` | `GOOGLE_API_KEY` | Gemini 2.5 Flash Lite is free tier, fast, and produces good extraction results. Recommended for the Extract role. |
+| `anthropic` | `ANTHROPIC_API_KEY` | Claude Haiku seems affordable (~$0.01–0.02 per listing), very fast, and produces high-quality assessments. Supports prompt caching — stable context (profile, criteria) is cached across a batch run, reducing input token cost after the first call. Recommended for the Assess role. |
+| `openai` | `OPENAI_API_KEY` | Untested but should work. |
 
-Triage is skipped entirely for non-Ollama providers (API models are fast enough that the pre-filter adds no value).
+Triage only runs when using a local Ollama provider. With API providers the extract call is fast enough that we can just run it.
 
 ### Recommended setups
 
@@ -174,7 +181,7 @@ Triage is skipped entirely for non-Ollama providers (API models are fast enough 
 LLM_PROVIDER=ollama
 LLM_MODEL=qwen3.5:9b
 ```
-Requires Ollama running locally with `qwen3.5:9b` and `llama3.2` pulled. Slow on modest hardware; extraction takes 1–2 min per listing on CPU.
+Requires Ollama running locally with `qwen3.5:9b` and `llama3.2` pulled. Slower; extraction and assessment can take 5-10 minutes per listing on M4 Pro 24GB.
 
 **Fast and mostly free (recommended):**
 ```
@@ -189,7 +196,6 @@ ANTHROPIC_API_KEY=...
 LLM_TRIAGE_PROVIDER=ollama
 LLM_TRIAGE_MODEL=llama3.2
 ```
-Extraction is free (Gemini free tier). Assessment costs roughly $0.01–0.02 per listing with Haiku. At 50 listings/day this is well under $1/day.
 
 ## Project structure
 

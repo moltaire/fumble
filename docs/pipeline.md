@@ -45,13 +45,13 @@ Stages marked **[no LLM]** cost nothing. Stages that call an LLM name the role u
 │  Model:   TRIAGE_MODEL  (default: ollama/llama3.2)          │
 │  Note:    skipped entirely for non-Ollama providers         │
 │                                                             │
-│  Binary check on first 3 000 chars of raw text:            │
+│  Binary check on first 3 000 chars of raw text:             │
 │  Is this page actually a job listing?                       │
 │  Passes by default; only rejects when confident it is NOT   │
 │  (login wall, search results page, cookie notice, etc.)     │
 │                                                             │
 │  Output: bool                                               │
-│     false → log failures.log, skip (no DB entry)           │
+│     false → log failures.log, skip (no DB entry)            │
 └────────────────────────────┬────────────────────────────────┘
                              │
                              ▼
@@ -80,16 +80,16 @@ Stages marked **[no LLM]** cost nothing. Stages that call an LLM name the role u
 │    Matches job_title against ## Spam keywords in criteria   │
 │    Hit → reasoning = "Job title contained '{keyword}'."     │
 │           pipeline_stage = keyword_spam                     │
-│           save stub Assessment to DB  (rating = spam)  ──► DB│
+│           save stub Assessment to DB  (rating = spam)  ─► DB│
 │                                                             │
 │  Step B — LLM semantic check  (only if A passed)            │
 │  Model:   TRIAGE_MODEL  (default: ollama/llama3.2)          │
 │    Checks first 3 000 chars of listing_text:                │
-│    Does the role type clearly fall outside all target roles? │
+│    Does the role type clearly fall outside target roles?    │
 │    Conservative — only flags obvious role-type mismatches   │
 │    Hit → reasoning = short phrase stating mismatch          │
 │           pipeline_stage = llm_spam                         │
-│           save stub Assessment to DB  (rating = spam)  ──► DB│
+│           save stub Assessment to DB  (rating = spam)  ─► DB│
 │                                                             │
 │  Stub Assessment fields for spam-filtered entries:          │
 │    job_summary, fit fields = empty / dummy values           │
@@ -144,7 +144,7 @@ Stages marked **[no LLM]** cost nothing. Stages that call an LLM name the role u
 | Extract | `ollama/qwen3.5:9b` | `gemini/gemini-2.5-flash-lite` — free tier, fast | `LLM_EXTRACT_PROVIDER`, `LLM_EXTRACT_MODEL` |
 | Assess | `ollama/qwen3.5:9b` | `anthropic/claude-haiku-4-5-20251001` — cheap, fast, high quality | `LLM_ASSESS_PROVIDER`, `LLM_ASSESS_MODEL` |
 
-Triage is skipped entirely for non-Ollama providers (API models are fast enough that the pre-filter adds no value).
+Triage is skipped entirely for non-Ollama providers.
 
 Anthropic assessment uses prompt caching: profile and criteria are cached across a batch run, reducing input token cost by ~80% after the first call.
 
