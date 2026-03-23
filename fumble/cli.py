@@ -187,8 +187,6 @@ def main():
         except Exception as e:
             print(f"  Extraction failed: {e}")
             _log_failure(canonical_url, source, f"extraction_failed: {e}")
-            mark_url_seen(tracking_url)
-            mark_url_seen(canonical_url)
             skip_count += 1
             continue
 
@@ -252,8 +250,6 @@ def main():
         except Exception as e:
             print(f"  Assessment failed: {e}")
             _log_failure(canonical_url, source, f"assessment_failed: {e}")
-            mark_url_seen(tracking_url)
-            mark_url_seen(canonical_url)
             skip_count += 1
             continue
 

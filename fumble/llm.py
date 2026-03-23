@@ -30,6 +30,8 @@ def call_llm(system: str, prompt: str, schema: dict, temperature: float | None =
         return _call_openai(system, prompt, schema, temperature, model or EXTRACT_MODEL)
     elif p == "anthropic":
         return _call_anthropic(system, prompt, schema, temperature, model or ASSESS_MODEL, cached_prefix=cached_prefix)
+    elif p == "openrouter":
+        return _call_openrouter(system, prompt, schema, temperature, model or EXTRACT_MODEL)
     elif p == "gemini":
         return _call_gemini(system, prompt, schema, temperature, model or EXTRACT_MODEL)
     else:
@@ -109,6 +111,28 @@ def _call_anthropic(system: str, prompt: str, schema: dict, temperature: float |
     if not content:
         raise ValueError("LLM returned empty response")
     return _extract_json(content)
+
+
+def _call_openrouter(system: str, prompt: str, schema: dict, temperature: float | None, model: str) -> str:
+    from openai import OpenAI
+
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=os.environ["OPENROUTER_API_KEY"],
+    )
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
+        response_format={"type": "json_object"},
+        temperature=temperature,
+    )
+    content = response.choices[0].message.content
+    if not content:
+        raise ValueError("OpenRouter returned empty response")
+    return content
 
 
 def _call_gemini(system: str, prompt: str, schema: dict, temperature: float | None, model: str) -> str:
