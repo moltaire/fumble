@@ -481,7 +481,7 @@ if search != _prev_search:
     )
 
 # --- Table (hidden in focus mode) ---
-TABLE_COLS = [
+_DEFAULT_COLS = [
     "rating",
     "suggestion",
     "employer",
@@ -492,13 +492,14 @@ TABLE_COLS = [
     "assessed_at",
     "url",
 ]
-SPAM_TABLE_COLS = [
-    "rating",
-    "employer",
-    "job_title",
-    "assessed_at",
-    "url",
-]
+VIEW_COLS: dict[str, list[str]] = {
+    "📬 Inbox": _DEFAULT_COLS,
+    "⭐ Saved": _DEFAULT_COLS,
+    "📮 Applied": ["rating", "employer", "job_title", "url"],
+    "👎 Hidden": _DEFAULT_COLS,
+    "✨ All": _DEFAULT_COLS,
+    "🚫 Spam": ["rating", "employer", "job_title", "assessed_at", "url"],
+}
 
 selected_url = st.session_state.get("selected_url")
 
@@ -528,7 +529,7 @@ if not _focus_mode:
         )
 
         selection = st.dataframe(
-            filtered[SPAM_TABLE_COLS if view == "🚫 Spam" else TABLE_COLS],
+            filtered[VIEW_COLS[view]],
             column_config={
                 "rating": st.column_config.TextColumn("💘", width=10),
                 "suggestion": st.column_config.TextColumn(
