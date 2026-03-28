@@ -5,6 +5,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 from dateutil import tz
 
+import fumble.settings_page as settings_page
+
 from fumble.store import (
     DB_PATH,
     delete_assessment,
@@ -44,6 +46,12 @@ var d = window.parent.document;
 _focus_mode = st.session_state.get(
     "focus_mode", st.session_state.get("_focus_persisted", False)
 )
+_show_settings = st.session_state.get("show_settings", False)
+
+if _show_settings:
+    settings_page.render()
+    st.stop()
+
 if not _focus_mode:
     st.title("💘 Fumble")
 
@@ -238,7 +246,7 @@ if not _focus_mode:
 
     _vcol, _right = st.columns([2, 1], gap="large")
     with _right:
-        _rcol, _scol = st.columns([1, 4], gap="small")
+        _rcol, _scol, _setcol = st.columns([1, 4, 1], gap="small")
     with _vcol:
         view = (
             st.segmented_control(
@@ -351,6 +359,10 @@ if not _focus_mode:
             key="filter_search",
             label_visibility="collapsed",
         )
+    with _setcol:
+        if st.button(":material/settings:", help="Settings", use_container_width=True):
+            st.session_state["show_settings"] = True
+            st.rerun()
 else:
     search = st.session_state.get("filter_search", "")
 
