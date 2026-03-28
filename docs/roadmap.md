@@ -17,6 +17,7 @@
 ## Dashboard
 
 - [ ] Run panel: trigger the pipeline from within the dashboard — select `--days` / `--unread` / `--force`, run as subprocess, stream output to the UI
+- [ ] Record `applied_at` timestamp when a job is marked as applied — add column to DB (with migration in `init_db`), set/clear in `update_rating`, surface in the Applied view
 
 ## Spam filter
 
@@ -28,3 +29,9 @@ See [`embedding-classifier-spec.md`](embedding-classifier-spec.md) for a detaile
 - [ ] Additional input adapters: file/URL paste is covered by `--url`; a file upload in the dashboard would be a natural addition
 - [ ] If the dashboard becomes a daily-use tool: Streamlit's `st.dataframe` (row selection, no editing) vs `st.data_editor` (editing, no selection) tension becomes a ceiling. A lightweight FastAPI + HTMX or small React frontend would handle stateful tables natively
 - [ ] Profile interview agent: conversational LLM flow to generate or update `search-criteria.md` based on what's working
+
+
+
+## Usability
+
+- [ ] Better error messages: IMAP login failures, folder-not-found, and scrape errors should surface clearly rather than crashing silently

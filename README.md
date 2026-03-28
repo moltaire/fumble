@@ -21,8 +21,7 @@ URLs are cached after processing. Re-running over the same date range skips alre
 ### Requirements
 
 - Python 3.12+
-- [uv](https://docs.astral.sh/uv/) (recommended) or pip
-- A Playwright-compatible Chrome install: `uv run python -m playwright install chrome`
+- [uv](https://docs.astral.sh/uv/)
 - At least one LLM provider (see [LLM configuration](#llm-configuration) below)
 
 ### Install
@@ -44,48 +43,43 @@ After tool install, two commands are available globally:
 
 ### Configuration
 
-#### Add your background and search profile
+#### IMAP credentials
 
-Copy `resources/profile.example.md` → `resources/profile.md` and `resources/search-criteria.example.md` → `resources/search-criteria.md`, then fill them in with your background and job search criteria. These files are gitignored so your personal details stay local.
-
-You can optionally add a `## Spam keywords` section to `search-criteria.md` — a list of keywords matched against job titles as the first (cheapest) spam filter stage, before the LLM check.
-
-#### IMAP setup
-
-Copy `.env.example` to `.env` and fill in:
+Copy `.env.example` to `.env` and fill in your IMAP credentials (and LLM settings — see [LLM configuration](#llm-configuration) below):
 
 ```
-# IMAP credentials
 IMAP_HOST=imap.example.com
 IMAP_EMAIL=you@example.com
 IMAP_PASSWORD=yourpassword
-
-# LLM — see "LLM configuration" below for all options
 ```
 
-#### Source setup
+#### Profile, search criteria, and sources
 
-Edit `resources/sources.toml` to configure which email folders to scan and what URL patterns to extract. Each source maps an IMAP folder to a regex pattern matched against URLs found in emails. Currently configured sources:
+Launch the dashboard and open **Settings** (⚙️ top right). Three tabs let you configure everything without touching any files:
 
-| Source | Notes |
-|---|---|
-| StepStone | Matches StepStone redirect links |
-| LinkedIn | Matches LinkedIn job alert emails; deduplicates by job ID; uses browser scraper |
-| GoodJobs | Matches Brevo tracking links |
-| Climatebase | Matches SendGrid tracking links |
+- **Profile** — your background, skills, and experience; used by the LLM to assess fit
+- **Search Criteria** — target roles, domains, and dealbreakers; used for spam filtering and assessment
+- **Sources** — which email folders to scan; presets available for LinkedIn, StepStone, and others
 
-Each source can optionally set `scraper = "browser"` to force Playwright (needed for login-required sites). The default is `"auto"` — curl first, browser fallback.
+You can optionally add a `## Spam keywords` section to your search criteria — a plain list of keywords matched against job titles as a fast pre-filter before the LLM check.
 
+#### Login-required sources (e.g. LinkedIn)
 
-### Login-required sources
+LinkedIn and similar sources require a logged-in browser session. First install the Playwright browser:
 
-Some sources (e.g. LinkedIn) require a logged-in browser session. Run this once before the first pipeline run:
-
+```bash
+uv run python -m playwright install chrome
 ```
+
+Then log in once before the first pipeline run:
+
+```bash
 fumblebee --login https://www.linkedin.com/login
 ```
 
-Log in inside the browser window, then press Enter in the terminal. The session is saved to `data/browser_profile/` and reused automatically on every subsequent scrape. Use the same command for any other source that requires login.
+Log in inside the browser window, then press Enter in the terminal. The session is saved to `data/browser_profile/` and reused automatically. Use the same command for any other source that requires login.
+
+If you're not using any login-required sources, you can skip the Playwright install entirely.
 
 ## Usage
 
@@ -213,6 +207,7 @@ fumble/
   store.py           # SQLite persistence
   dashboard.py       # Streamlit dashboard
   dashboard_cli.py   # fumble entry point
+  settings_page.py   # Settings UI (profile, search criteria, sources)
 scripts/
   compare_extraction.py  # Pipeline comparison tool (raw HTML vs extraction stages vs LLM output)
 resources/
