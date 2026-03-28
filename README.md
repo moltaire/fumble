@@ -65,13 +65,7 @@ You can optionally add a `## Spam keywords` section to your search criteria — 
 
 #### Login-required sources (e.g. LinkedIn)
 
-LinkedIn and similar sources require a logged-in browser session. First install the Playwright browser:
-
-```bash
-uv run python -m playwright install chrome
-```
-
-Then log in once before the first pipeline run:
+LinkedIn and similar sources require a logged-in browser session. Log in once before the first pipeline run:
 
 ```bash
 fumblebee --login https://www.linkedin.com/login
@@ -79,7 +73,7 @@ fumblebee --login https://www.linkedin.com/login
 
 Log in inside the browser window, then press Enter in the terminal. The session is saved to `data/browser_profile/` and reused automatically. Use the same command for any other source that requires login.
 
-If you're not using any login-required sources, you can skip the Playwright install entirely.
+If Playwright can't find a browser, install one with `uv run python -m playwright install chrome`. This is usually not needed if Chrome is already installed on your system.
 
 ## Usage
 
