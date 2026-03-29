@@ -6,7 +6,6 @@ import streamlit.components.v1 as components
 from dateutil import tz
 
 import fumble.settings_page as settings_page
-
 from fumble.store import (
     DB_PATH,
     delete_assessment,
@@ -88,6 +87,7 @@ if not assessments and not spam_assessments:
 
 try:
     import tomllib as _tomllib
+
     with open(Path(__file__).parent.parent / "resources/sources.toml", "rb") as _f:
         _sources = _tomllib.load(_f).get("sources", [])
 except (FileNotFoundError, Exception):
@@ -141,9 +141,9 @@ _SLUG_VIEW = {v: k for k, v in _VIEW_SLUG.items()}
 # Refinement defaults = all options selected (no filtering)
 _REFINE_DEFAULTS: dict = {
     "refine_suggestion": list(SUGGESTION_LABELS),
-    "refine_domain_fit": list(FIT_LABELS),
     "refine_role_fit": list(FIT_LABELS),
     "refine_gap_risk": list(GAP_LABELS),
+    "refine_domain_fit": list(FIT_LABELS),
     "filter_employers": [],
     "filter_titles": [],
     "filter_scraped_after": None,
@@ -177,9 +177,9 @@ df = raw_df.copy()
 df["suggestion"] = df["suggestion"].map(SUGGESTION_ICON)
 _DOT = {"high": "🟢", "medium": "🟡", "low": "🔴"}
 _DOT_INV = {"low": "🟢", "medium": "🟡", "high": "🔴"}
-df["domain_fit"] = raw_df["domain_fit"].map(_DOT)
 df["role_fit"] = raw_df["role_fit"].map(_DOT)
 df["gap_risk"] = raw_df["gap_risk"].map(_DOT_INV)
+df["domain_fit"] = raw_df["domain_fit"].map(_DOT)
 df["source"] = df["source"].map(lambda v: SOURCE_DISPLAY.get(v, v.title()))
 df["rating"] = raw_df["rating"].map(lambda v: RATING_ICON.get(v, "🆕"))
 
@@ -207,14 +207,14 @@ if "_view_persisted" not in st.session_state:
     st.session_state["refine_suggestion"] = _param_to_labels(
         "suggestion", _SUGG_VAL_TO_LABEL, list(SUGGESTION_LABELS)
     )
-    st.session_state["refine_domain_fit"] = _param_to_labels(
-        "domain", _FIT_VAL_TO_LABEL, list(FIT_LABELS)
-    )
     st.session_state["refine_role_fit"] = _param_to_labels(
         "role", _FIT_VAL_TO_LABEL, list(FIT_LABELS)
     )
     st.session_state["refine_gap_risk"] = _param_to_labels(
         "gap", _GAP_VAL_TO_LABEL, list(GAP_LABELS)
+    )
+    st.session_state["refine_domain_fit"] = _param_to_labels(
+        "domain", _FIT_VAL_TO_LABEL, list(FIT_LABELS)
     )
 _current_view = st.session_state.get("_view_persisted", _DEFAULT_VIEW)
 _prev_view = st.session_state.get("_prev_view")
@@ -232,12 +232,12 @@ if not _focus_mode:
     _refine_active = (
         set(st.session_state.get("refine_suggestion", list(SUGGESTION_LABELS)))
         != set(SUGGESTION_LABELS)
-        or set(st.session_state.get("refine_domain_fit", list(FIT_LABELS)))
-        != set(FIT_LABELS)
         or set(st.session_state.get("refine_role_fit", list(FIT_LABELS)))
         != set(FIT_LABELS)
         or set(st.session_state.get("refine_gap_risk", list(GAP_LABELS)))
         != set(GAP_LABELS)
+        or set(st.session_state.get("refine_domain_fit", list(FIT_LABELS)))
+        != set(FIT_LABELS)
         or bool(st.session_state.get("filter_employers"))
         or bool(st.session_state.get("filter_titles"))
         or st.session_state.get("filter_scraped_after") is not None
@@ -280,26 +280,26 @@ if not _focus_mode:
                 )
             with _fc2:
                 st.pills(
-                    "Domain Fit",
-                    options=list(FIT_LABELS),
-                    default=list(FIT_LABELS),
-                    key="refine_domain_fit",
-                    selection_mode="multi",
-                )
-            with _fc3:
-                st.pills(
                     "Role Fit",
                     options=list(FIT_LABELS),
                     default=list(FIT_LABELS),
                     key="refine_role_fit",
                     selection_mode="multi",
                 )
-            with _fc4:
+            with _fc3:
                 st.pills(
                     "Gap Risk",
                     options=list(GAP_LABELS),
                     default=list(GAP_LABELS),
                     key="refine_gap_risk",
+                    selection_mode="multi",
+                )
+            with _fc4:
+                st.pills(
+                    "Domain Fit",
+                    options=list(FIT_LABELS),
+                    default=list(FIT_LABELS),
+                    key="refine_domain_fit",
                     selection_mode="multi",
                 )
 
@@ -372,9 +372,9 @@ else:
 # Read from session state — popover widgets only run when open, toggle hides them entirely
 view = _current_view
 _suggestion_keys = st.session_state.get("refine_suggestion") or list(SUGGESTION_LABELS)
-_domain_keys = st.session_state.get("refine_domain_fit") or list(FIT_LABELS)
 _role_keys = st.session_state.get("refine_role_fit") or list(FIT_LABELS)
 _gap_keys = st.session_state.get("refine_gap_risk") or list(GAP_LABELS)
+_domain_keys = st.session_state.get("refine_domain_fit") or list(FIT_LABELS)
 
 view_ratings = VIEWS.get(view, VIEWS[_DEFAULT_VIEW])
 suggestions = [SUGGESTION_LABELS[l] for l in _suggestion_keys]
@@ -394,9 +394,9 @@ def _to_param(selected: list, label_to_val: dict, all_labels: list) -> str | Non
 
 for _qk, _sel, _l2v, _all in [
     ("suggestion", _suggestion_keys, SUGGESTION_LABELS, list(SUGGESTION_LABELS)),
-    ("domain", _domain_keys, FIT_LABELS, list(FIT_LABELS)),
     ("role", _role_keys, FIT_LABELS, list(FIT_LABELS)),
     ("gap", _gap_keys, GAP_LABELS, list(GAP_LABELS)),
+    ("domain", _domain_keys, FIT_LABELS, list(FIT_LABELS)),
 ]:
     _val = _to_param(_sel, _l2v, _all)
     if _val is None:
@@ -428,9 +428,9 @@ else:
     mask = (
         raw_df["rating"].isin(view_ratings)
         & raw_df["suggestion"].isin(suggestions)
-        & raw_df["domain_fit"].isin(domain_fits)
         & raw_df["role_fit"].isin(role_fits)
         & raw_df["gap_risk"].isin(gap_risks)
+        & raw_df["domain_fit"].isin(domain_fits)
     )
     if selected_employers:
         mask &= raw_df["employer"].isin(selected_employers)
@@ -464,9 +464,9 @@ if _current_view == "⭐ Saved":
             "rating": filtered_raw["rating"].map({"superliked": 0, "liked": 1}),
             "suggestion": filtered_raw["suggestion"].map(_sug_ord),
             "scraped_at": filtered_raw["scraped_at"],
-            "domain_fit": filtered_raw["domain_fit"].map(_fit_ord),
             "role_fit": filtered_raw["role_fit"].map(_fit_ord),
             "gap_risk": filtered_raw["gap_risk"].map(_gap_ord),
+            "domain_fit": filtered_raw["domain_fit"].map(_fit_ord),
             "employer": filtered_raw["employer"].str.lower().fillna(""),
         }
     )
@@ -475,9 +475,9 @@ if _current_view == "⭐ Saved":
             "rating",
             "suggestion",
             "scraped_at",
-            "domain_fit",
             "role_fit",
             "gap_risk",
+            "domain_fit",
             "employer",
         ],
         ascending=[True, True, False, True, True, True, True],
@@ -500,9 +500,9 @@ _DEFAULT_COLS = [
     "suggestion",
     "employer",
     "job_title",
-    "domain_fit",
     "role_fit",
     "gap_risk",
+    "domain_fit",
     "assessed_at",
     "url",
 ]
@@ -861,23 +861,20 @@ if selected_url:
                 st.caption(row["reasoning"])
 
                 st.markdown("#### Fit analysis")
-                st.markdown(
-                    f"**{FIT_ICON.get(row['domain_fit'], '')} Domain fit: {row['domain_fit'].title()}**"
-                )
-                if row.get("domain_fit_reason"):
-                    st.caption(row["domain_fit_reason"])
+                ## Role
                 st.markdown(
                     f"**{FIT_ICON.get(row['role_fit'], '')} Role fit: {row['role_fit'].title()}**"
                 )
                 if row.get("role_fit_reason"):
                     st.caption(row["role_fit_reason"])
+                ## Gap
                 st.markdown(
                     f"**{GAP_ICON.get(row['gap_risk'], '')} Gap risk: {row['gap_risk'].title()}**"
                 )
                 if row.get("gap_risk_reason"):
                     st.caption(row["gap_risk_reason"])
-
-                with st.expander("Show details", expanded=False):
+                ### Gap details (if any)
+                with st.expander("Show gap details", expanded=False):
                     fit_areas = row.get("fit_areas") or []
                     gaps = row.get("gaps") or []
                     SEVERITY_ICON = {"minor": "🟡", "manageable": "🟠", "severe": "🔴"}
@@ -890,6 +887,12 @@ if selected_url:
                         for gap in gaps:
                             icon = SEVERITY_ICON.get(gap.get("severity", ""), "")
                             st.caption(f"- {icon} {gap['description']}")
+                ## Domain
+                st.markdown(
+                    f"**{FIT_ICON.get(row['domain_fit'], '')} Domain fit: {row['domain_fit'].title()}**"
+                )
+                if row.get("domain_fit_reason"):
+                    st.caption(row["domain_fit_reason"])
 
             st.divider()
             if st.button(
